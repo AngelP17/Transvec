@@ -415,8 +415,8 @@ MIT License - See LICENSE file for details.
 
 ## Credits
 
-- UI design inspired by [Palantir Foundry](https://www.palantir.com/platforms/foundry/)
-- Maps powered by [Mapbox GL JS](https://www.mapbox.com/)
+- UI design inspired by 
+- Maps powered by 
 - Graph visualization by [React Flow](https://reactflow.dev/)
 - Built with [React](https://react.dev/), [TypeScript](https://www.typescriptlang.org/), [Tailwind CSS](https://tailwindcss.com/), and [Vite](https://vite.dev/)
 
