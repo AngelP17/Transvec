@@ -1,6 +1,8 @@
 import { useState, lazy, Suspense, useEffect } from 'react';
 import Sidebar from './components/Sidebar';
 import MapView from './components/MapView';
+import SettingsPanel from './components/SettingsPanel';
+import SystemStatusPanel from './components/SystemStatusPanel';
 import { useSupabaseData } from './hooks/useSupabaseData';
 import { mockShipments, mockAlerts } from './data/mockData';
 import type { ViewTab, Shipment, Alert } from './types';
@@ -13,7 +15,7 @@ const DVRTimeline = lazy(() => import('./components/DVRTimeline'));
 // Loading overlay - non-disruptive, appears on top of existing content
 function DataLoadingIndicator({ visible }: { visible: boolean }) {
   if (!visible) return null;
-  
+
   return (
     <div className="absolute top-4 right-4 z-50 flex items-center gap-2 bg-void-lighter/90 backdrop-blur border border-border px-3 py-2 rounded-lg shadow-xl transition-opacity duration-300">
       <div className="w-4 h-4 border-2 border-accent border-t-transparent rounded-full animate-spin" />
@@ -29,16 +31,21 @@ function App() {
   const [selectedAlert, setSelectedAlert] = useState<Alert | null>(null);
   const [showDVR, setShowDVR] = useState(false);
   const [initialLoadComplete, setInitialLoadComplete] = useState(false);
-  
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [showGeofences, setShowGeofences] = useState(true);
+  const [showRoutes, setShowRoutes] = useState(true);
+  const [showBreaches, setShowBreaches] = useState(true);
+
   // Fetch data from Supabase
-  const { 
-    shipments, 
-    alerts, 
-    loading, 
-    error, 
+  const {
+    shipments,
+    alerts,
+    loading,
+    error,
     useMockFallback,
+    fabHealth,
     acknowledgeAlertById,
-    refreshData 
+    refreshData
   } = useSupabaseData();
 
   // Mark initial load as complete after first data fetch
@@ -74,6 +81,30 @@ function App() {
     }
   };
 
+  const handleToggleOverlays = () => {
+    const next = !(showGeofences && showRoutes && showBreaches);
+    setShowGeofences(next);
+    setShowRoutes(next);
+    setShowBreaches(next);
+  };
+
+  const handleExport = () => {
+    const payload = {
+      tab: activeTab,
+      timestamp: new Date().toISOString(),
+      shipments: effectiveShipments,
+      alerts: effectiveAlerts,
+    };
+
+    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `transvec_${activeTab.toLowerCase()}_${Date.now()}.json`;
+    link.click();
+    URL.revokeObjectURL(url);
+  };
+
   return (
     <div className="flex h-screen w-full bg-void text-text-bright overflow-hidden">
       {/* Sidebar Navigation */}
@@ -81,25 +112,27 @@ function App() {
         activeTab={activeTab}
         onTabChange={setActiveTab}
         alertCount={effectiveAlerts.filter(a => !a.acknowledged).length}
+        onOpenSettings={() => setSettingsOpen((prev) => !prev)}
+        isSettingsOpen={settingsOpen}
       />
 
       {/* Main Content Area */}
       <div className="flex-1 flex flex-col relative overflow-hidden" style={{ height: '100%' }}>
         {/* Map / Visualization Area */}
-        <div 
+        <div
           className={`flex-1 relative transition-all duration-300 ${isWorkbookOpen && activeTab === 'ANALYTICS' ? 'w-1/2' : 'w-full'}`}
           style={{ minHeight: 0, height: '100%' }}
         >
-          
+
           {/* Loading indicator - non-intrusive */}
           <DataLoadingIndicator visible={loading && initialLoadComplete} />
-          
+
           {/* Error indicator */}
           {error && (
             <div className="absolute top-4 right-4 z-50 bg-critical/20 border border-critical/50 px-4 py-2 rounded-lg">
               <div className="flex items-center gap-2">
                 <span className="text-critical text-sm">{error}</span>
-                <button 
+                <button
                   onClick={refreshData}
                   className="text-accent text-sm hover:underline"
                 >
@@ -108,7 +141,7 @@ function App() {
               </div>
             </div>
           )}
-          
+
           {/* Data source indicator */}
           <div className="absolute bottom-4 right-4 z-50 bg-void-lighter/90 border border-border px-3 py-1.5 rounded-lg">
             <div className="flex items-center gap-2">
@@ -119,15 +152,52 @@ function App() {
             </div>
           </div>
 
+          <SystemStatusPanel
+            activeTab={activeTab}
+            liveData={isUsingLiveData}
+            shipmentCount={effectiveShipments.length}
+            alertCount={effectiveAlerts.filter(a => !a.acknowledged).length}
+            fabHealth={fabHealth}
+            onRefresh={refreshData}
+            onToggleOverlays={handleToggleOverlays}
+            onExport={handleExport}
+          />
+
           {activeTab === 'OPS' && (
             <MapView
               shipments={effectiveShipments}
               selectedShipment={selectedShipment}
               onShipmentSelect={handleShipmentSelect}
               alerts={effectiveAlerts}
+              showGeofences={showGeofences}
+              showRoutes={showRoutes}
+              showBreaches={showBreaches}
             />
           )}
 
+          {activeTab === 'ANALYTICS' && (
+            <div className="absolute inset-0 flex items-center justify-center bg-void-light/60">
+              <div className="w-[560px] border border-border bg-void/90 rounded-2xl p-6 shadow-2xl">
+                <div className="text-xs uppercase tracking-[0.4em] text-text-muted mb-2">Analytics Workspace</div>
+                <div className="text-xl font-semibold text-text-bright mb-4">Telemetry & Forecast Console</div>
+                <div className="grid grid-cols-2 gap-4 text-sm">
+                  <div className="rounded-xl border border-border bg-void-lighter/70 p-4">
+                    <div className="text-[11px] uppercase tracking-[0.3em] text-text-muted">Active Streams</div>
+                    <div className="text-2xl font-mono text-text-bright mt-2">{effectiveShipments.length}</div>
+                  </div>
+                  <div className="rounded-xl border border-border bg-void-lighter/70 p-4">
+                    <div className="text-[11px] uppercase tracking-[0.3em] text-text-muted">Open Alerts</div>
+                    <div className="text-2xl font-mono text-critical mt-2">{effectiveAlerts.filter(a => !a.acknowledged).length}</div>
+                  </div>
+                  <div className="col-span-2 rounded-xl border border-border bg-void-lighter/70 p-4 text-xs text-text-muted">
+                    Use the workbook drawer below to run queries, simulations, and anomaly scans in real time.
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          <Suspense fallback={null}>
             {activeTab === 'ONTOLOGY' && (
               <OntologyGraph
                 onNodeSelect={(node) => {
@@ -138,7 +208,9 @@ function App() {
                 }}
               />
             )}
+          </Suspense>
 
+          <Suspense fallback={null}>
             {activeTab === 'ALERTS' && (
               <AlertPanel
                 alerts={effectiveAlerts}
@@ -147,6 +219,7 @@ function App() {
                 onAcknowledgeAlert={handleAcknowledgeAlert}
               />
             )}
+          </Suspense>
 
           {/* Toggle Workbook Button */}
           {activeTab === 'ANALYTICS' && !isWorkbookOpen && (
@@ -156,9 +229,9 @@ function App() {
               title="Open Code Workbook"
             >
               <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <rect width="18" height="18" x="3" y="3" rx="2" ry="2"/>
-                <line x1="9" x2="15" y1="3" y2="3"/>
-                <line x1="9" x2="15" y1="21" y2="21"/>
+                <rect width="18" height="18" x="3" y="3" rx="2" ry="2" />
+                <line x1="9" x2="15" y1="3" y2="3" />
+                <line x1="9" x2="15" y1="21" y2="21" />
               </svg>
             </button>
           )}
@@ -194,6 +267,17 @@ function App() {
             />
           )}
         </Suspense>
+
+        <SettingsPanel
+          isOpen={settingsOpen}
+          onClose={() => setSettingsOpen(false)}
+          showGeofences={showGeofences}
+          showRoutes={showRoutes}
+          showBreaches={showBreaches}
+          onToggleGeofences={() => setShowGeofences((prev) => !prev)}
+          onToggleRoutes={() => setShowRoutes((prev) => !prev)}
+          onToggleBreaches={() => setShowBreaches((prev) => !prev)}
+        />
       </div>
     </div>
   );

@@ -10,7 +10,7 @@
 
 ## 1. Executive Summary
 
-**Transvec** is a high-fidelity logistics intelligence platform designed specifically for the semiconductor and high-tech manufacturing sectors. Target customers include industry leaders such as **TSMC**, **Intel**, **Tesla**, **Samsung**, and **AMD**.
+**Transvec** is a high-fidelity logistics intelligence platform designed specifically for the semiconductor and high-tech manufacturing sectors. Customer identities are **anonymized** with codified identifiers (e.g., `FAB-ALPHA`, `CLIENT-OMEGA`) to reflect real-world defense/industrial deployments.
 
 Transvec serves as **"Part 3"** of the YieldOps ecosystem, completing the narrative by tracking critical assets **after they leave the manufacturing floor**:
 
@@ -44,12 +44,12 @@ Transvec reimagines logistics tracking as a **living, connected system**:
 ```mermaid
 flowchart TB
     subgraph ObjectCentric["OBJECT-CENTRIC VIEW"]
-        WL[Wafer Lot<br/>TSMC-3nm] -->|"links to"| SH[Shipment<br/>TRK-8842]
-        SH -->|"carried by"| CA[Carrier<br/>FedEx]
+        WL[Wafer Lot<br/>FAB-ALPHA-3nm] -->|"links to"| SH[Shipment<br/>TRK-8842]
+        SH -->|"carried by"| CA[Carrier<br/>LOGI-AIR]
 
-        FAC[Factory<br/>Hsinchu] -->|"originates"| WL
-        SH -->|"follows"| RT[Route<br/>TPE to LAX]
-        CA -->|"operated by"| DR[Driver<br/>John D.]
+        FAC[Factory<br/>FAB-ALPHA-18] -->|"originates"| WL
+        SH -->|"follows"| RT[Route<br/>PAC-01 to PORT-WEST-01]
+        CA -->|"operated by"| DR[Operator<br/>OP-9921]
     end
 
     subgraph Telemetry["ENVIRONMENTAL TELEMETRY"]
@@ -92,9 +92,18 @@ flowchart TB
 | **Critical Accent** | Red `#FF4D4F` (errors, critical alerts) |
 | **Success Accent** | Green `#0F9960` (normal, resolved states) |
 | **Data Density** | High-density, information-rich panels |
-| **Typography** | Inter for UI, JetBrains Mono for data values and code |
+| **Typography** | Inter for UI, JetBrains Mono for data values/code, Instrument Serif (italic) for display accents |
 
 > **Note:** The specification originally referenced Cyan `#00b3e6` as the primary accent. The implemented codebase uses `#2D72D2` (Blueprint-style blue), which provides better contrast ratios against the dark background and aligns with the Palantir Foundry aesthetic. All color tokens are defined in `tailwind.config.js` as the single source of truth.
+
+#### Defense-Grade UX Patterns (Implemented)
+
+- **Data Fusion / Digital Thread**: YieldOps job is the seed; Transvec enriches with carrier, route, operator, and compliance records
+- **Asset Dossier**: dense identity card with chain-of-custody and compliance status
+- **Mission Timeline**: unified operational feed (alerts + shipment state changes)
+- **Route Deviation Heatmap**: geofence breach density overlay
+- **Predictive ETA Bands**: confidence envelope per shipment
+- **Geofence Polygons**: GeoJSON polygon overlays loaded from Supabase (fallback table search)
 
 #### Technology Stack (Implemented)
 
@@ -103,19 +112,20 @@ flowchart TB
 | **Framework** | React 18 (TypeScript) | Type safety, component reusability, strict mode enabled |
 | **Build Tool** | Vite 6 | Sub-second HMR, optimized production tree-shaking |
 | **Styling** | Tailwind CSS 3.4 | Utility-first approach, purged production CSS, custom design tokens |
-| **Geospatial Engine** | Mapbox GL JS 3.9 | 3D building rendering, dark theme, smooth marker animation |
-| **Graph Visualization** | React Flow | Node-edge graph with expand/collapse, MiniMap, pan/zoom |
+| **Geospatial Engine** | MapLibre GL JS + MapTiler | Dark map styles, heatmap overlays, MapLibre controls |
+| **Graph Visualization** | react-force-graph-2d | Knowledge graph visualization (kg_nodes/kg_edges) |
 | **Charts** | Custom SVG | Zero-dependency sensor graphs in DVRTimeline (lightweight, 60fps) |
-| **Fonts** | Inter + JetBrains Mono | Professional UI typography with monospace data display |
+| **Fonts** | Inter + JetBrains Mono + Instrument Serif | UI typography, monospace telemetry, and display accents |
 
 #### Technology Stack (Planned for Backend Integration)
 
 | Component | Technology | Rationale |
 |-----------|------------|-----------|
 | **State Management** | TanStack Query (React Query) or Zustand | Cache management for live data, request deduplication |
-| **Icon System** | Phosphor Icons (`@phosphor-icons/react`) | Installed, pending integration into UI components |
+| **Icon System** | Tabler Icons (`@tabler/icons-react`) | Active icon system |
+| **Alt Icon System** | Phosphor Icons (`@phosphor-icons/react`) | Installed, pending integration into UI components |
 | **Analytics Charts** | Recharts | Installed, pending use for dashboard-level visualizations |
-| **Map Abstraction** | react-map-gl | Installed, pending evaluation as declarative Mapbox wrapper |
+| **Map Abstraction** | react-map-gl | Installed, pending evaluation as declarative MapLibre wrapper |
 
 #### UI Component Architecture
 
@@ -127,9 +137,9 @@ graph TB
         end
 
         subgraph MainView["Main View (Tab-based)"]
-            OPS["OPS: Geospatial Command<br/>Mapbox GL 3D Map"]
+            OPS["OPS: Geospatial Command<br/>MapLibre GL Map + MapTiler"]
             ANA["ANALYTICS: Code Workbook<br/>Jupyter-style Notebook"]
-            ONT["ONTOLOGY: Knowledge Graph<br/>React Flow"]
+            ONT["ONTOLOGY: Knowledge Graph<br/>ForceGraph 2D"]
             ALR["ALERTS: Alert Dashboard<br/>Severity Filtering"]
         end
 
@@ -153,10 +163,13 @@ graph TB
 |-----------|------|------|-------------|
 | **App** | `App.tsx` | 4.2K | Root layout shell, tab routing, shipment state |
 | **Sidebar** | `Sidebar.tsx` | 5.7K | Vertical navigation, alert badge, settings placeholder |
-| **MapView** | `MapView.tsx` | 10K | Mapbox GL 3D, markers, routes, stats overlay |
-| **ShipmentDetail** | `ShipmentDetail.tsx` | 11K | Telemetry cards, journey timeline, sensor list |
+| **MapView** | `MapView.tsx` | 10K | MapLibre map, markers, route deviation heatmap, ops overlays |
+| **AssetDossier** | `AssetDossierPanel.tsx` | 6K | Digital thread dossier, chain-of-custody, compliance |
+| **CarrierPerformanceIndex** | `CarrierPerformanceIndex.tsx` | 6K | Carrier scorecards with trend sparklines |
+| **MissionTimeline** | `MissionTimelinePanel.tsx` | 5K | Unified mission timeline (alerts + shipment states) |
+| **ShipmentDetail** | `ShipmentDetail.tsx` | 11K | Telemetry cards, journey timeline, ETA confidence bands |
 | **CodeWorkbook** | `CodeWorkbook.tsx` | 8.3K | Markdown/code cells, syntax highlight, mock execution |
-| **OntologyGraph** | `OntologyGraph.tsx` | 7K | React Flow nodes, edges, Cypher input, legend |
+| **OntologyGraph** | `OntologyGraph.tsx` | 7K | ForceGraph 2D + Supabase kg_nodes/kg_edges |
 | **AlertPanel** | `AlertPanel.tsx` | 11K | Alert list, severity filter, acknowledge, detail view |
 | **DVRTimeline** | `DVRTimeline.tsx` | 16K | Full-screen modal, map replay, SVG graphs, playback controls |
 
@@ -246,8 +259,8 @@ WHERE ST_DWithin(current_location, storm_center, 50000);
 (:Carrier)-[:OPERATED_BY]->(:Driver)
 (:Factory)-[:ORIGINATES]->(:WaferLot)
 
-// Find all shipments from TSMC Hsinchu that experienced shock >3G
-MATCH (f:Factory {name: "TSMC Hsinchu"})-[:ORIGINATES]->(wl:WaferLot)
+// Find all shipments from FAB-ALPHA that experienced shock >3G
+MATCH (f:Factory {name: "FAB-ALPHA-18"})-[:ORIGINATES]->(wl:WaferLot)
       -[:PART_OF]->(s:Shipment)-[:MONITORED_BY]->(sen:Sensor)
       -[:REPORTS]->(t:Telemetry {type: "shock"})
 WHERE t.value > 3.0
@@ -255,7 +268,7 @@ RETURN s.shipment_id, s.current_status, t.value, t.timestamp
 ORDER BY t.timestamp DESC;
 
 // Trace complete supply chain for a specific wafer lot
-MATCH path = (wl:WaferLot {lot_id: "TSMC-3NM-2024-001"})
+MATCH path = (wl:WaferLot {lot_id: "FAB-ALPHA-3NM-2024-001"})
       -[:PART_OF|CARRIED_BY|FOLLOWS|OPERATED_BY*]->(n)
 RETURN path;
 ```
@@ -326,19 +339,19 @@ flowchart LR
 ```mermaid
 flowchart TB
     subgraph UserFlow["User Interaction Flow"]
-        A["1. User searches for<br/>'TSMC-3NM-2024-001'"] --> B["2. System displays<br/>WaferLot node"]
+        A["1. User searches for<br/>'FAB-ALPHA-3NM-2024-001'"] --> B["2. System displays<br/>WaferLot node"]
         B --> C["3. User clicks<br/>'Expand Relationships'"]
         C --> D["4. Graph animates outward"]
     end
 
     subgraph Graph["Ontology Graph Relationships"]
-        FAC["TSMC Hsinchu Factory"]
-        FAC -->|ORIGINATES| WL["WaferLot<br/>TSMC-3NM-2024-001"]
+        FAC["FAB-ALPHA-18"]
+        FAC -->|ORIGINATES| WL["WaferLot<br/>FAB-ALPHA-3NM-2024-001"]
         WL -->|PART_OF| SH["Shipment<br/>TRK-8842"]
-        SH -->|CARRIED_BY| CA["Carrier: FedEx"]
-        SH -->|FOLLOWS| RT["Route: TPE to LAX"]
+        SH -->|CARRIED_BY| CA["Carrier: LOGI-AIR"]
+        SH -->|FOLLOWS| RT["Route: PAC-01 to PORT-WEST-01"]
         SH -->|MONITORED_BY| SE["Sensor: SHK-001"]
-        RT -->|PASSES_THROUGH| WP["Waypoint: Port of LA"]
+        RT -->|PASSES_THROUGH| WP["Waypoint: PORT-WEST-01"]
         SE -->|REPORTS| TEL["Telemetry: Shock 2.1G<br/>@ 2024-01-15"]
     end
 
@@ -461,23 +474,23 @@ flowchart LR
 ```mermaid
 flowchart LR
     subgraph Leg1["LEG 1: AIR FREIGHT"]
-        A1["FedEx Express<br/>FX-1842"]
-        A2["TPE to ANC to MEM"]
+        A1["LOGI-AIR<br/>AIR-1842"]
+        A2["PAC-01 to NODE-FOXTROT-04"]
         A3["Status: COMPLETE<br/>Duration: 18h 42m"]
         A1 --> A2 --> A3
     end
 
     subgraph Leg2["LEG 2: OCEAN FREIGHT"]
-        B1["Maersk Line<br/>MAERSK-HONGKONG"]
-        B2["MEM to LAX Port"]
+        B1["LOGI-SEA<br/>SEA-2201"]
+        B2["NODE-FOXTROT-04 to PORT-WEST-01"]
         B3["Status: IN_TRANSIT<br/>ETA: 14 days"]
         B1 --> B2 --> B3
     end
 
     subgraph Leg3["LEG 3: GROUND TRANSPORT"]
-        C1["Schneider Truck<br/>TRK-8842"]
-        C2["LAX to Austin Fab"]
-        C3["Status: SCHEDULED<br/>Driver: J. Doe"]
+        C1["LOGI-LAND<br/>TRK-8842"]
+        C2["PORT-WEST-01 to HUB-DELTA-03"]
+        C3["Status: SCHEDULED<br/>Operator: OP-9921"]
         C1 --> C2 --> C3
     end
 
@@ -581,7 +594,7 @@ const OntologyGraph = React.lazy(() => import('./components/OntologyGraph'))
 
 | Area | Status | Risk Level |
 |------|--------|------------|
-| **API Keys** | Demo Mapbox token hardcoded in `MapView.tsx` | HIGH - Must move to env variable |
+| **API Keys** | MapTiler key provided via `.env` | MEDIUM - Keep secrets out of source control |
 | **Source Maps** | Enabled in production build (`sourcemap: true`) | MEDIUM - Exposes source code |
 | **Dependencies** | No audit performed | MEDIUM - Potential CVEs |
 | **Input Validation** | No user input flows to backend (mock data only) | LOW - No attack surface yet |
@@ -783,7 +796,7 @@ graph TB
 |------|-------------|--------|
 | Project structure | React 18 + Vite 6 + TypeScript + Tailwind CSS | Done |
 | Design system | Palantir-inspired dark theme tokens in `tailwind.config.js` | Done |
-| Base map | Mapbox GL JS 3D with dark theme, markers, routes | Done |
+| Base map | MapLibre GL map with dark theme, markers, routes | Done |
 | Type system | Full domain types for Shipment, Carrier, Sensor, Alert, etc. | Done |
 | Mock data | 3 shipments, 5 carriers, 7 sensors, 4 alerts, telemetry history | Done |
 | Core components | All 7 components built and functional | Done |
@@ -797,7 +810,7 @@ graph TB
 | React.memo | Memoize ShipmentDetail, AlertPanel | Planned |
 | Error boundaries | Graceful fallback UI for component failures | Planned |
 | Accessibility | ARIA labels, keyboard navigation, focus management | Planned |
-| Environment variables | Move Mapbox token to `.env`, disable production source maps | Planned |
+| Environment variables | Manage MapTiler + Supabase keys in `.env`, disable production source maps | Planned |
 
 ### Phase 3: Backend Integration (Weeks 9-12)
 
@@ -816,30 +829,30 @@ graph TB
 | Real-time fleet tracking | 1000+ assets at 60fps via WebSocket | Planned |
 | Geofence Sentinel | Polygon zones with automated alert triggers | Planned |
 | AI anomaly detection | Isolation Forest / LSTM for telemetry analysis | Planned |
-| Demo dataset | Realistic TSMC-to-Tesla shipment simulation | Planned |
+| Demo dataset | Realistic FAB-ALPHA-to-CLIENT-OMEGA simulation | Planned |
 | Testing | Vitest unit/component tests + Playwright E2E | Planned |
 | Documentation | API docs, deployment guide, operations runbook | Planned |
 
 ---
 
-## 12. Target Customer Profiles
+## 12. Target Customer Profiles (Anonymized)
 
 ### 12.1 Primary: Semiconductor Manufacturers
 
-| Company | Use Case | Value Proposition |
+| Segment | Use Case | Value Proposition |
 |---------|----------|-------------------|
-| **TSMC** | Track 3nm wafer lots from Taiwan to global customers | Prevent $2M+ yield loss from transit damage |
-| **Intel** | Monitor A100/H100 GPU shipments to data centers | Ensure AI accelerator integrity |
-| **Samsung** | Manage memory chip logistics for mobile OEMs | Optimize just-in-time delivery |
-| **AMD** | Track EPYC processor shipments to cloud providers | Verify cold chain for sensitive components |
+| **FAB-ALPHA** | Track 3nm wafer lots from fab to global customers | Prevent $2M+ yield loss from transit damage |
+| **FAB-DELTA** | Monitor accelerator shipments to data centers | Ensure AI accelerator integrity |
+| **FAB-GOLF** | Manage memory chip logistics for mobile OEMs | Optimize just-in-time delivery |
+| **FAB-CHARLIE** | Track HPC processor shipments to cloud providers | Verify cold chain for sensitive components |
 
 ### 12.2 Secondary: High-Tech Manufacturers
 
-| Company | Use Case | Value Proposition |
+| Segment | Use Case | Value Proposition |
 |---------|----------|-------------------|
-| **Tesla** | Track battery cells from Gigafactory to assembly | Monitor temperature-sensitive lithium cells |
-| **Apple** | Secure supply chain for A-series chips | Prevent leaks, verify chain of custody |
-| **NVIDIA** | Manage GPU distribution to 100+ countries | Real-time inventory visibility |
+| **CLIENT-OMEGA** | Track energy storage cells from gigafactory to assembly | Monitor temperature-sensitive materials |
+| **CLIENT-ALPHA** | Secure supply chain for mobile SoCs | Prevent leaks, verify chain of custody |
+| **CLIENT-BRAVO** | Manage GPU distribution to 100+ countries | Real-time inventory visibility |
 
 ---
 
@@ -870,7 +883,7 @@ graph TB
 
 | Layer | Technology |
 |-------|------------|
-| Frontend (Current) | React 18, TypeScript, Tailwind CSS, Mapbox GL JS, React Flow |
+| Frontend (Current) | React 18, TypeScript, Tailwind CSS, MapLibre GL JS, react-force-graph-2d, Tabler Icons |
 | Frontend (Planned) | TanStack Query, Zustand, Phosphor Icons, Recharts |
 | Backend (Planned) | Python, FastAPI, async/await |
 | Databases (Planned) | PostgreSQL + PostGIS, Neo4j, TimescaleDB, Redis |
@@ -912,12 +925,12 @@ The authoritative design tokens are defined in the following files:
 |------|----------|
 | `tailwind.config.js` | Color palette, font families, animations |
 | `src/index.css` | Custom scrollbars, animations, tooltip styles |
-| `index.html` | Font preloads, Mapbox CSS |
+| `index.html` | Font preloads |
 
 Any discrepancy between this document and the codebase should be resolved in favor of the codebase. This specification is updated to reflect implementation decisions.
 
 ---
 
-*Document Version: 2.0*
-*Last Updated: February 2026*
+*Document Version: 2.1*
+*Last Updated: February 9, 2026*
 *Author: Portfolio Development Team*

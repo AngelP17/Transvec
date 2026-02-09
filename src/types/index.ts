@@ -144,6 +144,12 @@ export interface ShipmentDossier {
   flags: string[];
 }
 
+export type GeofenceFeatureCollection = GeoJSON.FeatureCollection<GeoJSON.Geometry, {
+  id?: string;
+  name?: string;
+  type?: string;
+}>;
+
 export type AlertType = 
   | 'ROUTE_DEVIATION'
   | 'SHOCK_THRESHOLD'

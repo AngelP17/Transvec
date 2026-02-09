@@ -43,8 +43,8 @@ flowchart LR
 graph TB
     subgraph Frontend["Frontend Layer"]
         UI[React 18 + TypeScript]
-        MB[Mapbox GL JS]
-        RF[React Flow]
+        MB[MapLibre GL JS]
+        RF[ForceGraph 2D]
         TW[Tailwind CSS]
     end
 
@@ -55,9 +55,12 @@ graph TB
         AP[AlertPanel - Anomaly Detection]
         DT[DVRTimeline - Environmental Recorder]
         SD[ShipmentDetail - Telemetry Detail]
+        AD[AssetDossier - Digital Thread]
+        MT[Mission Timeline]
     end
 
     subgraph DataLayer["Data Layer"]
+        SB[Supabase]
         MS[Mock Services]
         TS[TypeScript Domain Types]
     end
@@ -65,6 +68,7 @@ graph TB
     UI --> Components
     MB --> MV
     RF --> OG
+    SB --> DataLayer
     DataLayer --> Components
 ```
 
@@ -74,12 +78,13 @@ graph TB
 
 ### 1. Operational View (Map)
 
-- Real-time geospatial tracking via Mapbox GL JS with 3D buildings and dark theme
+- Real-time geospatial tracking via MapLibre GL JS with MapTiler styles
 - Multi-modal transport markers (Air / Sea / Land) with status-based color coding
 - Click-to-select markers with live telemetry popups (shock, temp, humidity, vibration)
-- Route visualization from origin to current location
+- **Route Deviation Heatmap** overlay (geofence breach / route deviation density)
+- **Carrier Performance Index** scorecards + trend sparklines
+- **Mission Timeline** unified ops feed (alerts + shipment state changes)
 - Live statistics overlay: total assets, in-transit count, delivered, critical alerts
-- Animated pulse indicators on critical shipments
 
 ### 2. Shipment Detail Panel
 
@@ -88,6 +93,8 @@ graph TB
 - Active sensor inventory with status indicators
 - Wafer lot tracking with associated value
 - One-click DVR launch for environmental playback
+- **Digital Thread** (YieldOps job → Transvec dossier enrichment)
+- **Predictive ETA Bands** (confidence envelope per shipment)
 
 ### 3. Code Workbook (Jupyter-style)
 
@@ -98,11 +105,9 @@ graph TB
 
 ### 4. Ontology Graph
 
-- React Flow-powered node graph with typed nodes (Factory, WaferLot, Shipment, Carrier, Route, Sensor)
-- Color-coded nodes with animated labeled edges
-- Expand/collapse node relationships
-- MiniMap navigator and pan/zoom controls
-- Cypher query input panel (UI scaffold for Neo4j integration)
+- ForceGraph 2D knowledge graph (kg_nodes / kg_edges from Supabase)
+- Color-coded nodes with labeled edges
+- Zoom-to-fit + refresh controls
 - Node and edge statistics display
 
 ### 5. Alert Center
@@ -121,6 +126,7 @@ graph TB
 - Variable playback speeds: 0.5x, 1x, 2x, 4x
 - Auto-generated event log with anomaly markers (SHOCK, TEMP, VIBRATION)
 - 200-point synthetic telemetry dataset per shipment
+- Asset dossier overlay with chain-of-custody + compliance records
 
 ---
 
@@ -131,10 +137,10 @@ graph TB
 | **Framework** | React 18 + TypeScript | Type-safe component architecture |
 | **Build** | Vite 6 | Fast HMR, optimized production builds |
 | **Styling** | Tailwind CSS 3.4 | Utility-first, Palantir-inspired dark theme |
-| **Geospatial** | Mapbox GL JS 3.9 | 3D map rendering, marker management |
-| **Graph** | React Flow | Node-edge graph visualization |
+| **Geospatial** | MapLibre GL JS + MapTiler | Dark map styles and heatmap overlays |
+| **Graph** | react-force-graph-2d | Knowledge graph visualization |
 | **Charts** | Custom SVG | Lightweight, zero-dependency sensor graphs |
-| **Fonts** | Inter + JetBrains Mono | UI typography + monospace data display |
+| **Fonts** | Inter + JetBrains Mono + Instrument Serif | UI typography + monospace data display + display accent |
 
 ### Dependency Notes
 
@@ -143,8 +149,9 @@ The following packages are included in `package.json` for future use but are **n
 | Package | Status | Planned Use |
 |---------|--------|-------------|
 | `recharts` | Installed, unused | Dashboard-level analytics charts |
-| `react-map-gl` | Installed, unused | Declarative map wrapper (MapView uses Mapbox GL directly) |
+| `react-map-gl` | Installed, unused | Declarative map wrapper (MapView uses MapLibre directly) |
 | `@phosphor-icons/react` | Installed, unused | Icon system for UI elements |
+| `@tabler/icons-react` | Active | Main icon system |
 
 > These will be tree-shaken from production builds by Vite but should be actively integrated or removed before v1.0 to keep the dependency surface clean.
 
@@ -184,6 +191,7 @@ The following packages are included in `package.json` for future use but are **n
 | Role | Font | Weights |
 |------|------|---------|
 | **UI** | Inter | 300, 400, 500, 600, 700 |
+| **Display** | Instrument Serif (Italic) | 400 |
 | **Data / Code** | JetBrains Mono | 400, 500, 600 |
 
 ---
@@ -194,7 +202,7 @@ The following packages are included in `package.json` for future use but are **n
 
 - **Node.js** 18+ (LTS recommended)
 - **npm** 9+ or **yarn** 1.22+
-- **Mapbox Access Token** (free tier: [mapbox.com/signup](https://account.mapbox.com/auth/signup/))
+- **MapTiler Key** (create in MapTiler Cloud)
 
 ### Installation
 
@@ -215,14 +223,31 @@ cp .env.example .env
 Create a `.env` file in the project root:
 
 ```env
-# Required - Mapbox GL JS access token
-VITE_MAPBOX_TOKEN=pk.your_mapbox_token_here
+# Required - MapTiler key
+VITE_MAPTILER_KEY=your_maptiler_key_here
+
+# Required - Supabase (client-safe keys only)
+VITE_SUPABASE_URL=https://your-project.supabase.co
+VITE_SUPABASE_ANON_KEY=your_anon_key_here
+
+# Server-only (do NOT expose to the client)
+# SUPABASE_SERVICE_KEY=sb_secret_xxx
 
 # Optional - API base URL (for future backend integration)
 VITE_API_BASE_URL=http://localhost:8000/v1
 ```
 
-> **Security**: Never commit `.env` files. The `.env.example` file contains placeholder values only. The current build includes a demo Mapbox token in `MapView.tsx` which must be replaced with an environment variable before any deployment.
+> **Security**: Never commit `.env` files. Do not expose `SUPABASE_SERVICE_KEY` in the browser.
+
+### Geofence Data (Supabase)
+
+The map overlays GeoJSON polygons from Supabase. The client will look for a table named `transvec_geofences` or `geofences` with one of the following columns:
+
+- `geojson` (GeoJSON geometry)
+- `geometry` (GeoJSON geometry)
+- `polygon` (GeoJSON geometry)
+
+Each row should include optional metadata columns: `id`, `name`, `zone_type`.
 
 ### Development
 
@@ -243,7 +268,7 @@ npm run preview
 
 ```
 transvec/
-├── index.html                  # Entry HTML with font preloads and Mapbox CSS
+├── index.html                  # Entry HTML with font preloads
 ├── package.json                # Dependencies and scripts
 ├── vite.config.ts              # Vite configuration (port 5173, sourcemaps)
 ├── tsconfig.json               # TypeScript strict mode, path aliases (@/*)
@@ -261,12 +286,21 @@ transvec/
     │   └── mockData.ts         # Mock generators: shipments, telemetry, alerts, ontology
     └── components/
         ├── Sidebar.tsx         # Vertical nav: OPS / ANALYTICS / ONTOLOGY / ALERTS
-        ├── MapView.tsx         # Mapbox GL 3D map with shipment markers
-        ├── ShipmentDetail.tsx  # Telemetry cards, journey timeline, sensor list
+        ├── MapView.tsx         # MapLibre map with shipment markers + heatmap
+        ├── AssetDossierPanel.tsx # Asset dossier + chain of custody
+        ├── CarrierPerformanceIndex.tsx # Carrier scorecards + trends
+        ├── MissionTimelinePanel.tsx # Unified ops timeline
+        ├── ShipmentDetail.tsx  # Telemetry cards, journey timeline, ETA bands
         ├── CodeWorkbook.tsx    # Jupyter-style notebook with Python highlighting
-        ├── OntologyGraph.tsx   # React Flow knowledge graph with Cypher input
+        ├── OntologyGraph.tsx   # ForceGraph 2D knowledge graph
         ├── AlertPanel.tsx      # Alert dashboard with filtering and acknowledgment
         └── DVRTimeline.tsx     # Environmental recorder with playback controls
+    ├── hooks/
+    │   ├── useKnowledgeGraphData.ts # Supabase kg_nodes/kg_edges
+    │   └── useElementSize.ts   # Responsive graph sizing
+    └── lib/
+        ├── digitalThread.ts    # YieldOps → Transvec dossier enrichment
+        └── etaBands.ts         # ETA confidence band calculation
 ```
 
 ---
@@ -309,8 +343,8 @@ erDiagram
 
 | Entity | Count | Notes |
 |--------|-------|-------|
-| Shipments | 3 | TSMC->Tesla, Intel->NVIDIA, Samsung->Apple |
-| Carriers | 5 | FedEx, Maersk, Schneider, DHL, COSCO |
+| Shipments | 3 | FAB-ALPHA->CLIENT-OMEGA, FAB-CHARLIE->CLIENT-BRAVO, FAB-DELTA->CLIENT-ALPHA |
+| Carriers | 5 | Logistics Air/Sea/Land (codified) |
 | Sensors | 7 | GPS, Shock, Temperature, Humidity, Vibration |
 | Alerts | 4 | 2 Critical, 2 Warning |
 | Journey Legs | 3 | Air (x2), Land |
@@ -336,17 +370,19 @@ This project follows performance best practices aligned with the React Performan
 ### Recommended Next Steps
 
 1. **Lazy-load DVRTimeline** - It is a full-screen modal with heavy SVG rendering. Wrap with `React.lazy()` and `<Suspense>`:
+
    ```tsx
    const DVRTimeline = React.lazy(() => import('./components/DVRTimeline'))
    ```
 
 2. **Lazy-load CodeWorkbook and OntologyGraph** - These tabs are not visible on initial load. Code-split by route:
+
    ```tsx
    const CodeWorkbook = React.lazy(() => import('./components/CodeWorkbook'))
    const OntologyGraph = React.lazy(() => import('./components/OntologyGraph'))
    ```
 
-3. **Mapbox GL CSS** - Move from `<link>` in `index.html` to dynamic import in `MapView.tsx` to avoid blocking render for non-map tabs.
+3. **MapLibre CSS** - Ensure map CSS is loaded only when OPS tab is active if bundle size becomes a concern.
 
 4. **Remove unused dependencies** or integrate them:
    - `recharts` - Replace custom SVG or remove from `package.json`
@@ -360,6 +396,7 @@ This project follows performance best practices aligned with the React Performan
 ### Bundle Analysis
 
 Run `npx vite-bundle-visualizer` after building to identify large chunks. Key targets:
+
 - `mapbox-gl` (~700KB) - Ensure it loads only on OPS tab
 - `react-flow-renderer` (~200KB) - Ensure it loads only on ONTOLOGY tab
 
@@ -369,7 +406,7 @@ Run `npx vite-bundle-visualizer` after building to identify large chunks. Key ta
 
 | Area | Current State | Required Before Deployment |
 |------|---------------|---------------------------|
-| **Mapbox Token** | Hardcoded demo token in `MapView.tsx` | Move to `VITE_MAPBOX_TOKEN` env variable with domain restrictions |
+| **MapTiler Key** | Env-backed | Keep `VITE_MAPTILER_KEY` out of source control |
 | **CSP Headers** | None | Add Content-Security-Policy in deployment config |
 | **Dependencies** | Not audited | Run `npm audit` and resolve before production |
 | **Input Sanitization** | N/A (no user input to backend) | Required when Cypher query input connects to Neo4j |
@@ -415,11 +452,11 @@ MIT License - See LICENSE file for details.
 
 ## Credits
 
-- UI design inspired by 
-- Maps powered by 
-- Graph visualization by [React Flow](https://reactflow.dev/)
+- UI design inspired by [Palantir Foundry](https://www.palantir.com/platforms/foundry/)
+- Maps powered by [MapLibre GL JS](https://maplibre.org/)
+- Graph visualization by [react-force-graph-2d](https://github.com/vasturiano/react-force-graph)
 - Built with [React](https://react.dev/), [TypeScript](https://www.typescriptlang.org/), [Tailwind CSS](https://tailwindcss.com/), and [Vite](https://vite.dev/)
 
 ---
 
-*Document Version: 2.0 | Last Updated: February 2026*
+*Document Version: 2.1 | Last Updated: February 9, 2026*

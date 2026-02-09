@@ -1,3 +1,4 @@
+/* @refresh reset */
 import { useEffect, useMemo, useRef, useState } from 'react';
 import maplibregl from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
@@ -6,12 +7,17 @@ import OpsIntelPanel from './OpsIntelPanel';
 import AssetDossierPanel from './AssetDossierPanel';
 import CarrierPerformanceIndex from './CarrierPerformanceIndex';
 import MissionTimelinePanel from './MissionTimelinePanel';
+import { useGeofences } from '../hooks/useGeofences';
+import { computeBreachPoints, buildRouteLineFeatures } from '../lib/geofences';
 
 interface MapViewProps {
   shipments: Shipment[];
   selectedShipment: Shipment | null;
   onShipmentSelect: (shipment: Shipment) => void;
   alerts: Alert[];
+  showGeofences?: boolean;
+  showRoutes?: boolean;
+  showBreaches?: boolean;
 }
 
 // Status colors
@@ -24,7 +30,15 @@ const statusColors: Record<string, string> = {
   HELD_CUSTOMS: '#FFB000',
 };
 
-export default function MapView({ shipments, selectedShipment, onShipmentSelect, alerts }: MapViewProps) {
+export default function MapView({
+  shipments,
+  selectedShipment,
+  onShipmentSelect,
+  alerts,
+  showGeofences = true,
+  showRoutes = true,
+  showBreaches = true,
+}: MapViewProps) {
   const mapContainer = useRef<HTMLDivElement>(null);
   const map = useRef<maplibregl.Map | null>(null);
   const markers = useRef<maplibregl.Marker[]>([]);
@@ -33,6 +47,7 @@ export default function MapView({ shipments, selectedShipment, onShipmentSelect,
   const [loadError, setLoadError] = useState<string | null>(null);
   const [mapStyleId, setMapStyleId] = useState<'darkmatter' | 'satellite' | 'streets'>('darkmatter');
   const mapTilerKey = import.meta.env.VITE_MAPTILER_KEY;
+  const { geofences } = useGeofences(shipments);
 
   const styleUrl = useMemo(() => {
     if (!mapTilerKey) return 'https://demotiles.maplibre.org/style.json';
@@ -58,7 +73,26 @@ export default function MapView({ shipments, selectedShipment, onShipmentSelect,
       })
       .filter(Boolean);
 
-    return {\n      type: 'FeatureCollection',\n      features,\n    } as GeoJSON.FeatureCollection;\n  }, [alerts, shipments]);
+    return {
+      type: 'FeatureCollection',
+      features,
+    } as GeoJSON.FeatureCollection;
+  }, [alerts, shipments]);
+
+  const breachGeoJson = useMemo(() => {
+    const features = computeBreachPoints(shipments, geofences);
+    return {
+      type: 'FeatureCollection',
+      features,
+    } as GeoJSON.FeatureCollection;
+  }, [shipments, geofences]);
+
+  const routeGeoJson = useMemo(() => buildRouteLineFeatures(shipments), [shipments]);
+
+  const shipmentsWithLocation = useMemo(
+    () => shipments.filter((shipment) => Boolean(shipment.currentLocation)),
+    [shipments]
+  );
 
   // Initialize map
   useEffect(() => {
@@ -151,12 +185,216 @@ export default function MapView({ shipments, selectedShipment, onShipmentSelect,
   useEffect(() => {
     if (!map.current || !isLoaded || !isStyleReady) return;
     const mapInstance = map.current;
-    const sourceId = 'route-deviation-source';
-    const layerId = 'route-deviation-heat';
-    const pointLayerId = 'route-deviation-points';
+    const sourceId = "route-deviation-source";
+    const layerId = "route-deviation-heat";
+    const pointLayerId = "route-deviation-points";
 
     if (!mapInstance.getSource(sourceId)) {
-      mapInstance.addSource(sourceId, {\n        type: 'geojson',\n        data: deviationGeoJson,\n      });\n\n      mapInstance.addLayer({\n        id: layerId,\n        type: 'heatmap',\n        source: sourceId,\n        paint: {\n          'heatmap-weight': [\n            'case',\n            ['==', ['get', 'severity'], 'CRITICAL'], 1,\n            ['==', ['get', 'severity'], 'WARNING'], 0.6,\n            0.3,\n          ],\n          'heatmap-intensity': 1.2,\n          'heatmap-color': [\n            'interpolate',\n            ['linear'],\n            ['heatmap-density'],\n            0, 'rgba(0,0,0,0)',\n            0.3, 'rgba(255, 176, 0, 0.3)',\n            0.6, 'rgba(255, 77, 79, 0.5)',\n            1, 'rgba(255, 77, 79, 0.8)',\n          ],\n          'heatmap-radius': 24,\n          'heatmap-opacity': 0.65,\n        },\n      });\n\n      mapInstance.addLayer({\n        id: pointLayerId,\n        type: 'circle',\n        source: sourceId,\n        paint: {\n          'circle-radius': 6,\n          'circle-color': [\n            'case',\n            ['==', ['get', 'severity'], 'CRITICAL'], '#FF4D4F',\n            ['==', ['get', 'severity'], 'WARNING'], '#FFB000',\n            '#2D72D2',\n          ],\n          'circle-stroke-color': '#10161a',\n          'circle-stroke-width': 1.5,\n        },\n      });\n    } else {\n      const source = mapInstance.getSource(sourceId) as maplibregl.GeoJSONSource;\n      source.setData(deviationGeoJson);\n    }\n  }, [deviationGeoJson, isLoaded, isStyleReady]);
+      mapInstance.addSource(sourceId, {
+        type: "geojson",
+        data: deviationGeoJson,
+      });
+
+      mapInstance.addLayer({
+        id: layerId,
+        type: "heatmap",
+        source: sourceId,
+        paint: {
+          "heatmap-weight": [
+            "case",
+            ["==", ["get", "severity"], "CRITICAL"], 1,
+            ["==", ["get", "severity"], "WARNING"], 0.6,
+            0.3,
+          ],
+          "heatmap-intensity": 1.2,
+          "heatmap-color": [
+            "interpolate",
+            ["linear"],
+            ["heatmap-density"],
+            0, "rgba(0,0,0,0)",
+            0.3, "rgba(255, 176, 0, 0.3)",
+            0.6, "rgba(255, 77, 79, 0.5)",
+            1, "rgba(255, 77, 79, 0.8)",
+          ],
+          "heatmap-radius": 24,
+          "heatmap-opacity": 0.65,
+        },
+      });
+
+      mapInstance.addLayer({
+        id: pointLayerId,
+        type: "circle",
+        source: sourceId,
+        paint: {
+          "circle-radius": 6,
+          "circle-color": [
+            "case",
+            ["==", ["get", "severity"], "CRITICAL"], "#FF4D4F",
+            ["==", ["get", "severity"], "WARNING"], "#FFB000",
+            "#2D72D2",
+          ],
+          "circle-stroke-color": "#10161a",
+          "circle-stroke-width": 1.5,
+        },
+      });
+    } else {
+      const source = mapInstance.getSource(sourceId) as maplibregl.GeoJSONSource;
+      source.setData(deviationGeoJson);
+    }
+  }, [deviationGeoJson, isLoaded, isStyleReady]);
+
+  // Geofence polygons overlay
+  useEffect(() => {
+    if (!map.current || !isLoaded || !isStyleReady) return;
+    const mapInstance = map.current;
+    const sourceId = 'geofence-polygons';
+    const fillLayerId = 'geofence-fill';
+    const lineLayerId = 'geofence-line';
+
+    if (!showGeofences) {
+      if (mapInstance.getLayer(fillLayerId)) mapInstance.removeLayer(fillLayerId);
+      if (mapInstance.getLayer(lineLayerId)) mapInstance.removeLayer(lineLayerId);
+      if (mapInstance.getSource(sourceId)) mapInstance.removeSource(sourceId);
+      return;
+    }
+
+    if (!geofences || geofences.features.length === 0) return;
+
+    if (!mapInstance.getSource(sourceId)) {
+      mapInstance.addSource(sourceId, {
+        type: 'geojson',
+        data: geofences,
+      });
+
+      mapInstance.addLayer({
+        id: fillLayerId,
+        type: 'fill',
+        source: sourceId,
+        paint: {
+          'fill-color': '#2D72D2',
+          'fill-opacity': 0.08,
+        },
+      });
+
+      mapInstance.addLayer({
+        id: lineLayerId,
+        type: 'line',
+        source: sourceId,
+        paint: {
+          'line-color': '#2D72D2',
+          'line-width': 1.2,
+          'line-opacity': 0.6,
+        },
+      });
+    } else {
+      const source = mapInstance.getSource(sourceId) as maplibregl.GeoJSONSource;
+      source.setData(geofences);
+    }
+  }, [geofences, isLoaded, isStyleReady, showGeofences]);
+
+  // Geofence breach markers
+  useEffect(() => {
+    if (!map.current || !isLoaded || !isStyleReady) return;
+    const mapInstance = map.current;
+    const sourceId = 'geofence-breaches';
+    const circleLayerId = 'geofence-breaches-circle';
+    const labelLayerId = 'geofence-breaches-label';
+
+    if (!showBreaches) {
+      if (mapInstance.getLayer(circleLayerId)) mapInstance.removeLayer(circleLayerId);
+      if (mapInstance.getLayer(labelLayerId)) mapInstance.removeLayer(labelLayerId);
+      if (mapInstance.getSource(sourceId)) mapInstance.removeSource(sourceId);
+      return;
+    }
+
+    if (!mapInstance.getSource(sourceId)) {
+      mapInstance.addSource(sourceId, {
+        type: 'geojson',
+        data: breachGeoJson,
+      });
+
+      mapInstance.addLayer({
+        id: circleLayerId,
+        type: 'circle',
+        source: sourceId,
+        paint: {
+          'circle-radius': 8,
+          'circle-color': [
+            'case',
+            ['==', ['get', 'severity'], 'CRITICAL'], '#FF4D4F',
+            '#FFB000',
+          ],
+          'circle-opacity': 0.9,
+          'circle-stroke-color': '#0b0f14',
+          'circle-stroke-width': 2,
+        },
+      });
+
+      mapInstance.addLayer({
+        id: labelLayerId,
+        type: 'symbol',
+        source: sourceId,
+        layout: {
+          'text-field': 'X',
+          'text-size': 10,
+          'text-allow-overlap': true,
+          'text-ignore-placement': true,
+        },
+        paint: {
+          'text-color': '#0b0f14',
+        },
+      });
+    } else {
+      const source = mapInstance.getSource(sourceId) as maplibregl.GeoJSONSource;
+      source.setData(breachGeoJson);
+    }
+  }, [breachGeoJson, isLoaded, isStyleReady, showBreaches]);
+
+  // Route path lines by mode
+  useEffect(() => {
+    if (!map.current || !isLoaded || !isStyleReady) return;
+    const mapInstance = map.current;
+    const sourceId = 'route-paths';
+    const layers = [
+      { id: 'route-paths-truck', mode: 'TRUCK', color: '#2D72D2', width: 2.2, dash: [1, 0] },
+      { id: 'route-paths-train', mode: 'TRAIN', color: '#37d0ff', width: 2.4, dash: [1.2, 0.6] },
+      { id: 'route-paths-air', mode: 'AIR', color: '#9D7BFF', width: 2.8, dash: [0.5, 1.2] },
+      { id: 'route-paths-sea', mode: 'SEA', color: '#00D68F', width: 2.6, dash: [2, 1.2] },
+    ];
+
+    if (!showRoutes) {
+      layers.forEach((layer) => {
+        if (mapInstance.getLayer(layer.id)) mapInstance.removeLayer(layer.id);
+      });
+      if (mapInstance.getSource(sourceId)) mapInstance.removeSource(sourceId);
+      return;
+    }
+
+    if (!mapInstance.getSource(sourceId)) {
+      mapInstance.addSource(sourceId, {
+        type: 'geojson',
+        data: routeGeoJson,
+      });
+
+      layers.forEach((layer) => {
+        mapInstance.addLayer({
+          id: layer.id,
+          type: 'line',
+          source: sourceId,
+          filter: ['==', ['get', 'mode'], layer.mode],
+          paint: {
+            'line-color': layer.color,
+            'line-width': layer.width,
+            'line-opacity': 0.7,
+            'line-dasharray': layer.dash as any,
+          },
+        });
+      });
+    } else {
+      const source = mapInstance.getSource(sourceId) as maplibregl.GeoJSONSource;
+      source.setData(routeGeoJson);
+    }
+  }, [routeGeoJson, isLoaded, isStyleReady, showRoutes]);
 
   // Swap map style without animation
   useEffect(() => {
@@ -289,7 +527,7 @@ export default function MapView({ shipments, selectedShipment, onShipmentSelect,
               <div className="w-2 h-2 bg-success rounded-full animate-pulse" />
               LIVE FEED
             </div>
-            <div className="text-xl font-mono text-text-bright">{shipments.length * 137} ASSETS</div>
+            <div className="text-xl font-mono text-text-bright">{shipmentsWithLocation.length} ASSETS</div>
             <div className="text-[10px] text-text-muted tracking-wider">TRACKED IN REAL-TIME</div>
           </div>
 

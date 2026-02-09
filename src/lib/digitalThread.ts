@@ -1,22 +1,28 @@
 import type { YieldOpsJob } from './supabase';
 import type { ShipmentDossier } from '../types';
 
-const CARRIER_RULES: Record<string, { mode: ShipmentDossier['mode']; carrier: string; route: string; origin: string; destination: string; }> = {
-  Tesla: { mode: 'SEA', carrier: 'LOGI-PRIME', route: 'SEA-FREIGHT', origin: 'TPE', destination: 'LAX' },
-  Apple: { mode: 'AIR', carrier: 'LOGI-AIR', route: 'AIR-FREIGHT', origin: 'TPE', destination: 'SJC' },
-  Samsung: { mode: 'AIR', carrier: 'LOGI-AIR', route: 'AIR-FREIGHT', origin: 'ICN', destination: 'AUS' },
-  NVIDIA: { mode: 'AIR', carrier: 'LOGI-AIR', route: 'AIR-FREIGHT', origin: 'TPE', destination: 'SJC' },
-  AMD: { mode: 'SEA', carrier: 'LOGI-PRIME', route: 'SEA-FREIGHT', origin: 'KAO', destination: 'LAX' },
-};
+const CARRIER_RULES: Array<{ mode: ShipmentDossier['mode']; carrier: string; route: string; origin: string; destination: string; }> = [
+  { mode: 'SEA', carrier: 'LOGI-PRIME', route: 'SEA-FREIGHT', origin: 'TPE', destination: 'LAX' },
+  { mode: 'AIR', carrier: 'LOGI-AIR', route: 'AIR-FREIGHT', origin: 'TPE', destination: 'SJC' },
+  { mode: 'AIR', carrier: 'LOGI-AIR', route: 'AIR-FREIGHT', origin: 'ICN', destination: 'AUS' },
+  { mode: 'SEA', carrier: 'LOGI-PRIME', route: 'SEA-FREIGHT', origin: 'KAO', destination: 'LAX' },
+  { mode: 'TRUCK', carrier: 'SECURE-LOGIX', route: 'LAND-SECURE', origin: 'PHX', destination: 'DEN' },
+  { mode: 'TRAIN', carrier: 'IRONLINE', route: 'RAIL-SECURE', origin: 'CHI', destination: 'NYC' },
+];
 
-const CLIENT_ALIAS: Record<string, string> = {
-  Tesla: 'CLIENT-OMEGA',
-  Apple: 'CLIENT-ALPHA',
-  Samsung: 'CLIENT-GOLF',
-  NVIDIA: 'CLIENT-BRAVO',
-  AMD: 'CLIENT-CHARLIE',
-  Intel: 'CLIENT-DELTA',
-};
+const CLIENT_CODES = [
+  'CLIENT-ALPHA',
+  'CLIENT-BRAVO',
+  'CLIENT-CHARLIE',
+  'CLIENT-DELTA',
+  'CLIENT-ECHO',
+  'CLIENT-FOXTROT',
+  'CLIENT-GOLF',
+  'CLIENT-HOTEL',
+  'CLIENT-INDIA',
+  'CLIENT-JULIET',
+  'CLIENT-OMEGA',
+];
 
 const OPERATORS = [
   { id: 'OP-9921', company: 'LOGISTICS-PRIME-LLC', role: 'L5_HAZMAT_DRIVER', rating: 'A+' },
@@ -39,14 +45,15 @@ function hashString(input: string) {
   return Math.abs(hash);
 }
 
+function sanitizeClient(tag: string | null) {
+  if (!tag) return 'CLIENT-UNKNOWN';
+  const index = hashString(tag) % CLIENT_CODES.length;
+  return CLIENT_CODES[index] || 'CLIENT-UNKNOWN';
+}
+
 export function buildShipmentDossier(job: YieldOpsJob, contents: string, statusLabel: string): ShipmentDossier {
-  const rule = CARRIER_RULES[job.customer_tag] || {
-    mode: 'TRUCK' as const,
-    carrier: 'SCHNEIDER',
-    route: 'LAND-SECURE',
-    origin: 'PHX',
-    destination: 'DEN',
-  };
+  const ruleIndex = job.customer_tag ? hashString(job.customer_tag) % CARRIER_RULES.length : 0;
+  const rule = CARRIER_RULES[ruleIndex] || CARRIER_RULES[0];
 
   const seed = hashString(job.job_id);
   const operator = OPERATORS[seed % OPERATORS.length];
@@ -54,7 +61,7 @@ export function buildShipmentDossier(job: YieldOpsJob, contents: string, statusL
 
   return {
     linkedJobId: job.job_name,
-    client: CLIENT_ALIAS[job.customer_tag] || job.customer_tag || 'CLIENT-UNKNOWN',
+    client: sanitizeClient(job.customer_tag),
     contents,
     carrier: rule.carrier,
     route: `${rule.route} (${rule.origin}→${rule.destination})`,

@@ -1,4 +1,5 @@
 import { mockJourneyLegs, mockSensors, mockCarriers } from '../data/mockData';
+import { computeEtaBand } from '../lib/etaBands';
 import type { Shipment } from '../types';
 
 interface ShipmentDetailProps {
@@ -19,6 +20,7 @@ const statusColors: Record<string, string> = {
 export default function ShipmentDetail({ shipment, onClose, onOpenDVR }: ShipmentDetailProps) {
   const sensors = mockSensors.filter(s => s.shipmentId === shipment.id);
   const journeyLegs = mockJourneyLegs;
+  const etaBand = computeEtaBand(shipment);
 
   return (
     <div className="absolute right-0 top-0 bottom-0 w-[400px] bg-void-lighter border-l border-border shadow-2xl z-20 overflow-auto">
@@ -81,6 +83,37 @@ export default function ShipmentDetail({ shipment, onClose, onOpenDVR }: Shipmen
             </div>
           </section>
         )}
+
+        {/* ETA Confidence */}
+        <section>
+          <h3 className="text-sm font-bold text-text-muted uppercase tracking-wider mb-3">ETA Confidence Band</h3>
+          <div className="bg-code-bg border border-border rounded-lg p-3 space-y-2">
+            <div className="flex items-center justify-between text-xs">
+              <span className="text-text-muted">Lower Bound</span>
+              <span className="font-mono text-text-bright">{etaBand.lowHours}h</span>
+            </div>
+            <div className="flex items-center justify-between text-xs">
+              <span className="text-text-muted">Most Likely</span>
+              <span className="font-mono text-accent">{etaBand.midHours}h</span>
+            </div>
+            <div className="flex items-center justify-between text-xs">
+              <span className="text-text-muted">Upper Bound</span>
+              <span className="font-mono text-text-bright">{etaBand.highHours}h</span>
+            </div>
+            <div className="mt-2">
+              <div className="flex items-center justify-between text-[10px] text-text-muted">
+                <span>Confidence</span>
+                <span className="font-mono text-text-bright">{Math.round(etaBand.confidence * 100)}%</span>
+              </div>
+              <div className="h-1.5 bg-border rounded-full overflow-hidden mt-1">
+                <div
+                  className="h-full bg-accent"
+                  style={{ width: `${etaBand.confidence * 100}%` }}
+                />
+              </div>
+            </div>
+          </div>
+        </section>
         {/* Current Telemetry */}
         <section>
           <div className="flex items-center justify-between mb-3">

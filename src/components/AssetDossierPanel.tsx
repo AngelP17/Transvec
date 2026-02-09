@@ -13,6 +13,7 @@ import {
   IconTruck,
 } from '@tabler/icons-react';
 import type { Shipment } from '../types';
+import { computeEtaBand } from '../lib/etaBands';
 
 interface AssetDossierPanelProps {
   shipment: Shipment;
@@ -21,6 +22,7 @@ interface AssetDossierPanelProps {
 export default function AssetDossierPanel({ shipment }: AssetDossierPanelProps) {
   const dossier = shipment.dossier;
   if (!dossier) return null;
+  const etaBand = computeEtaBand(shipment);
 
   const modeIcon = dossier.mode === 'AIR'
     ? <IconPlane className="w-4 h-4 text-accent" />
@@ -68,6 +70,21 @@ export default function AssetDossierPanel({ shipment }: AssetDossierPanelProps) 
         <div className="mt-1 flex items-center gap-2 text-[10px] text-text-muted">
           <IconDatabase className="w-3 h-3" />
           <span>{dossier.client} // {dossier.contents}</span>
+        </div>
+      </div>
+
+      <div className="px-3 py-2 border-b border-border bg-void-lighter/40">
+        <div className="text-[9px] font-bold text-text-muted uppercase tracking-wider mb-1">ETA Band</div>
+        <div className="flex items-center justify-between text-[10px] text-text-bright font-mono">
+          <span>{etaBand.lowHours}h</span>
+          <span className="text-accent">{etaBand.midHours}h</span>
+          <span>{etaBand.highHours}h</span>
+        </div>
+        <div className="mt-1 h-1.5 bg-border rounded-full overflow-hidden">
+          <div
+            className="h-full bg-accent"
+            style={{ width: `${etaBand.confidence * 100}%` }}
+          />
         </div>
       </div>
 
