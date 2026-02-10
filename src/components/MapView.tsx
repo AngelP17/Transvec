@@ -259,6 +259,7 @@ export default function MapView({
   const map = useRef<maplibregl.Map | null>(null);
   const clickPopup = useRef<maplibregl.Popup | null>(null);
   const styleReadyFrame = useRef<number | null>(null);
+  const mapMotionFrame = useRef<number | null>(null);
   const liveCaptureInterval = useRef<number | null>(null);
   const styleEpochRef = useRef(0);
   const styleReadyEpochRef = useRef<number | null>(null);
@@ -1110,6 +1111,63 @@ export default function MapView({
     }
   }, [routeGeoJson, routesEnabled, getOverlayInsertBeforeId, isLoaded, isStyleReady, overlayPalette, styleVersion]);
 
+  // Ambient motion pass (geofences/routes/breaches/deviation heat)
+  useEffect(() => {
+    if (!map.current || !isLoaded || !isStyleReady) return;
+    const mapInstance = map.current;
+    let stopped = false;
+    let lastTick = 0;
+    const startedAt = performance.now();
+
+    const animate = (now: number) => {
+      if (stopped || !map.current) return;
+      if (now - lastTick < 140) {
+        mapMotionFrame.current = requestAnimationFrame(animate);
+        return;
+      }
+      lastTick = now;
+
+      const seconds = (now - startedAt) / 1000;
+      const pulse = (Math.sin(seconds * 1.2) + 1) / 2;
+      const slowPulse = (Math.sin(seconds * 0.55) + 1) / 2;
+
+      if (mapInstance.getLayer('route-deviation-heat')) {
+        mapInstance.setPaintProperty('route-deviation-heat', 'heatmap-intensity', 1.0 + pulse * 0.4);
+        mapInstance.setPaintProperty('route-deviation-heat', 'heatmap-radius', 20 + pulse * 8);
+      }
+      if (mapInstance.getLayer('geofence-fill')) {
+        mapInstance.setPaintProperty('geofence-fill', 'fill-opacity', 0.06 + slowPulse * 0.05);
+      }
+      if (mapInstance.getLayer('known-customer-fill')) {
+        mapInstance.setPaintProperty('known-customer-fill', 'fill-opacity', 0.07 + slowPulse * 0.05);
+      }
+      if (mapInstance.getLayer('geo-risk-fill')) {
+        mapInstance.setPaintProperty('geo-risk-fill', 'fill-opacity', 0.10 + pulse * 0.06);
+      }
+      if (mapInstance.getLayer('geofence-breaches-circle')) {
+        mapInstance.setPaintProperty('geofence-breaches-circle', 'circle-radius', 7 + pulse * 2.4);
+      }
+
+      const routeLayers = ['route-paths-truck', 'route-paths-train', 'route-paths-air', 'route-paths-sea'];
+      routeLayers.forEach((layerId, index) => {
+        if (!mapInstance.getLayer(layerId)) return;
+        const shimmer = 0.78 + 0.22 * Math.sin(seconds * 1.1 + index * 0.9);
+        mapInstance.setPaintProperty(layerId, 'line-opacity', overlayPalette.routeOpacity * shimmer);
+      });
+
+      mapMotionFrame.current = requestAnimationFrame(animate);
+    };
+
+    mapMotionFrame.current = requestAnimationFrame(animate);
+    return () => {
+      stopped = true;
+      if (mapMotionFrame.current) {
+        cancelAnimationFrame(mapMotionFrame.current);
+        mapMotionFrame.current = null;
+      }
+    };
+  }, [isLoaded, isStyleReady, overlayPalette.routeOpacity, styleVersion]);
+
   // Swap map style without animation
   useEffect(() => {
     if (!map.current || !isLoaded) return;
@@ -1121,7 +1179,22 @@ export default function MapView({
     setLoadError(null);
     styleEpochRef.current += 1;
     styleReadyEpochRef.current = null;
-    map.current.setStyle(styleDefinition, { diff: false });
+    const mapInstance = map.current;
+    const isRemoteStyle = typeof styleDefinition === 'string';
+    let fallbackApplied = false;
+    let styleErrorHandler: ((e: unknown) => void) | null = null;
+
+    if (isRemoteStyle) {
+      styleErrorHandler = () => {
+        if (fallbackApplied || !map.current) return;
+        fallbackApplied = true;
+        map.current.setStyle(structuredClone(FALLBACK_STYLE_DEFINITIONS[mapStyleId]), { diff: false });
+        showToast(`Using fallback ${MAP_STYLE_OPTIONS.find((s) => s.id === mapStyleId)?.label || mapStyleId} style`);
+      };
+      mapInstance.once('error', styleErrorHandler);
+    }
+
+    mapInstance.setStyle(styleDefinition, { diff: false });
 
     const startedAt = Date.now();
     const waitForStyleReady = () => {
@@ -1140,12 +1213,15 @@ export default function MapView({
     styleReadyFrame.current = requestAnimationFrame(waitForStyleReady);
 
     return () => {
+      if (styleErrorHandler) {
+        mapInstance.off('error', styleErrorHandler);
+      }
       if (styleReadyFrame.current) {
         cancelAnimationFrame(styleReadyFrame.current);
         styleReadyFrame.current = null;
       }
     };
-  }, [styleDefinition, isLoaded, markStyleReady]);
+  }, [styleDefinition, isLoaded, mapStyleId, markStyleReady, showToast]);
 
   // Shipment point layer (always-on, replaces fragile DOM markers)
   useEffect(() => {

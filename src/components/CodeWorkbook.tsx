@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { mockNotebookCells } from '../data/mockData';
 import type { NotebookCell, Shipment } from '../types';
 
@@ -7,15 +7,190 @@ interface CodeWorkbookProps {
   selectedShipment: Shipment | null;
 }
 
+type RuntimeValue = number | string | boolean;
+type RuntimeScope = Record<string, RuntimeValue>;
+
+function splitArguments(input: string) {
+  const parts: string[] = [];
+  let current = '';
+  let quote: '"' | "'" | null = null;
+  let escaping = false;
+
+  for (const ch of input) {
+    if (escaping) {
+      current += ch;
+      escaping = false;
+      continue;
+    }
+    if (ch === '\\') {
+      current += ch;
+      escaping = true;
+      continue;
+    }
+    if ((ch === '"' || ch === "'")) {
+      if (quote === ch) {
+        quote = null;
+      } else if (!quote) {
+        quote = ch;
+      }
+      current += ch;
+      continue;
+    }
+    if (ch === ',' && !quote) {
+      parts.push(current.trim());
+      current = '';
+      continue;
+    }
+    current += ch;
+  }
+
+  if (current.trim().length > 0) {
+    parts.push(current.trim());
+  }
+  return parts;
+}
+
+function parseQuotedString(value: string): string | null {
+  const trimmed = value.trim();
+  if (
+    (trimmed.startsWith('"') && trimmed.endsWith('"')) ||
+    (trimmed.startsWith("'") && trimmed.endsWith("'"))
+  ) {
+    return trimmed.slice(1, -1);
+  }
+  return null;
+}
+
+function evaluateMathExpression(expression: string, scope: RuntimeScope): number {
+  const tokenRegex = /\b[A-Za-z_][A-Za-z0-9_]*\b/g;
+  const resolved = expression.replace(tokenRegex, (token) => {
+    if (token === 'True') return '1';
+    if (token === 'False') return '0';
+    const value = scope[token];
+    if (value === undefined) {
+      throw new Error(`Unknown variable "${token}"`);
+    }
+    if (typeof value !== 'number' && typeof value !== 'boolean') {
+      throw new Error(`Variable "${token}" is not numeric`);
+    }
+    return typeof value === 'boolean' ? (value ? '1' : '0') : String(value);
+  });
+
+  if (!/^[0-9+\-*/%.()\s]+$/.test(resolved)) {
+    throw new Error('Unsupported expression syntax');
+  }
+
+  const result = Function(`"use strict"; return (${resolved});`)() as number;
+  if (typeof result !== 'number' || !Number.isFinite(result)) {
+    throw new Error('Expression did not return a finite number');
+  }
+  return result;
+}
+
+function evaluateValue(raw: string, scope: RuntimeScope): RuntimeValue {
+  const trimmed = raw.trim();
+  const quoted = parseQuotedString(trimmed);
+  if (quoted !== null) return quoted;
+
+  if (/^-?\d+(\.\d+)?$/.test(trimmed)) {
+    return Number(trimmed);
+  }
+  if (trimmed === 'True') return true;
+  if (trimmed === 'False') return false;
+  if (/^[A-Za-z_][A-Za-z0-9_]*$/.test(trimmed)) {
+    if (!(trimmed in scope)) {
+      throw new Error(`Unknown variable "${trimmed}"`);
+    }
+    return scope[trimmed] as RuntimeValue;
+  }
+  return evaluateMathExpression(trimmed, scope);
+}
+
+function executeNotebookCell(
+  code: string,
+  scope: RuntimeScope,
+  fallbackOutput: string | undefined
+) {
+  const outputs: string[] = [];
+  const lines = code.split('\n');
+  let sawComplexPython = false;
+
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith('#')) continue;
+
+    if (/^(import|from)\s+/.test(trimmed)) {
+      sawComplexPython = true;
+      continue;
+    }
+
+    const printMatch = trimmed.match(/^print\((.*)\)$/);
+    if (printMatch) {
+      const args = splitArguments(printMatch[1] || '');
+      const values = args.map((arg) => String(evaluateValue(arg, scope)));
+      outputs.push(values.join(' '));
+      continue;
+    }
+
+    const assignmentMatch = trimmed.match(/^([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.+)$/);
+    if (assignmentMatch) {
+      const [, variable, rhs] = assignmentMatch;
+      scope[variable] = evaluateValue(rhs, scope);
+      continue;
+    }
+
+    if (
+      /(ta\.|tp\.|sklearn|fit_predict|predict_eta|get_shipments|get_active_vessels|get_port_congestion|visualize_map|show\(\))/.test(trimmed)
+    ) {
+      sawComplexPython = true;
+      continue;
+    }
+
+    const value = evaluateValue(trimmed, scope);
+    outputs.push(String(value));
+  }
+
+  if (outputs.length > 0) {
+    return outputs.join('\n');
+  }
+
+  if (sawComplexPython) {
+    return fallbackOutput || '[SIMULATION] Complex Python cell executed in demo mode.';
+  }
+
+  return '[OK] Cell executed.';
+}
+
 export default function CodeWorkbook({ onClose, selectedShipment }: CodeWorkbookProps) {
   const [cells, setCells] = useState<NotebookCell[]>(mockNotebookCells);
   const [runningCell, setRunningCell] = useState<string | null>(null);
   const [saved, setSaved] = useState(true);
+  const runtimeScopeRef = useRef<RuntimeScope>({});
+
+  const updateCellContent = (cellId: string, content: string) => {
+    setCells((prev) => prev.map((cell) => (
+      cell.id === cellId ? { ...cell, content } : cell
+    )));
+    setSaved(false);
+  };
 
   const runCell = async (cellId: string) => {
     setRunningCell(cellId);
-    // Simulate execution delay
-    await new Promise(resolve => setTimeout(resolve, 1500));
+    setSaved(false);
+    await new Promise(resolve => setTimeout(resolve, 150));
+    const targetCell = cells.find((cell) => cell.id === cellId);
+    if (targetCell && targetCell.type === 'CODE') {
+      let output: string;
+      try {
+        output = executeNotebookCell(targetCell.content, runtimeScopeRef.current, targetCell.output);
+      } catch (error) {
+        output = `[ERROR] ${(error as Error).message}`;
+      }
+      setCells((prev) => prev.map((cell) => (
+        cell.id === cellId ? { ...cell, output } : cell
+      )));
+    }
+    setSaved(true);
     setRunningCell(null);
   };
 
@@ -35,10 +210,7 @@ export default function CodeWorkbook({ onClose, selectedShipment }: CodeWorkbook
         </div>
         <div className="flex items-center gap-2">
           <button 
-            onClick={() => {
-              setSaved(true);
-              setTimeout(() => setSaved(false), 2000);
-            }}
+            onClick={() => setSaved(true)}
             className={`p-1.5 hover:bg-border rounded transition-colors ${saved ? 'text-success' : 'text-text-muted hover:text-text-bright'}`}
             title={saved ? 'Saved!' : 'Save'}
           >
@@ -111,7 +283,19 @@ export default function CodeWorkbook({ onClose, selectedShipment }: CodeWorkbook
                 {/* Code Editor Area */}
                 <div className="p-3 font-mono text-sm leading-relaxed relative code-editor">
                   <div className="absolute left-0 top-0 bottom-0 w-1 bg-transparent group-focus-within:bg-accent transition-colors" />
-                  <CodeHighlighter code={cell.content} />
+                  <textarea
+                    value={cell.content}
+                    onChange={(event) => updateCellContent(cell.id, event.target.value)}
+                    onKeyDown={(event) => {
+                      if ((event.metaKey || event.ctrlKey) && event.key === 'Enter') {
+                        event.preventDefault();
+                        void runCell(cell.id);
+                      }
+                    }}
+                    spellCheck={false}
+                    className="w-full min-h-[160px] bg-transparent text-code-variable outline-none resize-y whitespace-pre font-mono"
+                    aria-label="Notebook code editor"
+                  />
                 </div>
 
                 {/* Output Area */}
@@ -144,73 +328,13 @@ export default function CodeWorkbook({ onClose, selectedShipment }: CodeWorkbook
       {/* Status Footer */}
       <div className="h-8 border-t border-border bg-void-light flex items-center px-4 justify-between text-[10px] text-text-muted">
         <div className="flex items-center gap-2">
-          <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="animate-spin">
+          <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={runningCell ? 'animate-spin' : ''}>
             <path d="M21 12a9 9 0 1 1-6.219-8.56"/>
           </svg>
-          <span>KERNEL: IDLE</span>
+          <span>KERNEL: {runningCell ? 'RUNNING' : 'IDLE'}</span>
         </div>
         <span>RAM: 240MB / 4GB</span>
       </div>
     </div>
   );
-}
-
-// Simple syntax highlighter
-function CodeHighlighter({ code }: { code: string }) {
-  const lines = code.split('\n');
-  
-  return (
-    <div>
-      {lines.map((line, i) => (
-        <div key={i} className="whitespace-pre">
-          {highlightLine(line)}
-        </div>
-      ))}
-    </div>
-  );
-}
-
-function highlightLine(line: string): React.ReactNode[] {
-  const tokens: React.ReactNode[] = [];
-  let remaining = line;
-  
-  // Keywords (defined inline in patterns)
-  const patterns = [
-    { regex: /^(\s*)(#.*)$/, className: 'text-code-comment' }, // Comments
-    { regex: /^(\s*)(import|from|as|def|class|return|if|else|for|in)\b/, className: 'text-code-keyword' },
-    { regex: /(['"`])(?:(?=(\\?))\2[\s\S])*?\1/, className: 'text-code-string' }, // Strings
-    { regex: /\b\d+\.?\d*\b/, className: 'text-code-number' }, // Numbers
-    { regex: /\b([a-zA-Z_][a-zA-Z0-9_]*)\s*(?=\()/, className: 'text-code-function' }, // Function calls
-  ];
-  
-  let key = 0;
-  
-  while (remaining.length > 0) {
-    let matched = false;
-    
-    for (const pattern of patterns) {
-      const match = remaining.match(pattern.regex);
-      if (match && match.index === 0) {
-        tokens.push(
-          <span key={key++} className={pattern.className}>
-            {match[0]}
-          </span>
-        );
-        remaining = remaining.slice(match[0].length);
-        matched = true;
-        break;
-      }
-    }
-    
-    if (!matched) {
-      tokens.push(
-        <span key={key++} className="text-code-variable">
-          {remaining[0]}
-        </span>
-      );
-      remaining = remaining.slice(1);
-    }
-  }
-  
-  return tokens;
 }
