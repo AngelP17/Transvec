@@ -121,6 +121,10 @@ function App() {
           shipment.id,
           shipment.trackingCode,
           shipment.dossier?.linkedJobId,
+          shipment.dossier?.client,
+          shipment.dossier?.contents,
+          shipment.origin.name,
+          shipment.destination.name,
           shipment.status,
           shipment.statusLabel,
         ]

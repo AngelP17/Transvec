@@ -73,6 +73,18 @@ body {
   border-top-color: #17171a;
 }
 
+.maplibregl-popup-content {
+  background: rgba(10, 12, 15, 0.95);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 12px;
+  color: #e6edf3;
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.4);
+}
+
+.maplibregl-popup-anchor-bottom .maplibregl-popup-tip {
+  border-top-color: rgba(10, 12, 15, 0.95);
+}
+
 .maplibregl-ctrl-top-right {
   top: 96px !important;
   right: 18px !important;
@@ -86,6 +98,40 @@ body {
 
 .maplibregl-ctrl button {
   filter: invert(1);
+}
+
+.maplibregl-ctrl-attrib {
+  background: rgba(0, 0, 0, 0.84) !important;
+  border: 1px solid rgba(255, 255, 255, 0.12) !important;
+  color: #c7ccd4 !important;
+  border-radius: 8px !important;
+  box-shadow: 0 10px 26px rgba(0, 0, 0, 0.38) !important;
+}
+
+.maplibregl-ctrl-attrib-inner {
+  font-size: 10px !important;
+  letter-spacing: 0.01em;
+}
+
+.maplibregl-ctrl-attrib a {
+  color: #e5e7eb !important;
+  text-decoration: underline;
+  text-decoration-color: rgba(229, 231, 235, 0.45);
+}
+
+.maplibregl-ctrl-attrib a:hover {
+  color: #f3f4f6 !important;
+}
+
+.maplibregl-ctrl-bottom-right {
+  right: 14px !important;
+  bottom: 10px !important;
+}
+
+@media (min-width: 1024px) {
+  .maplibregl-ctrl-bottom-right {
+    right: calc(min(92vw, 22rem) + 16px) !important;
+  }
 }
 
 .mapboxgl-popup-content {
@@ -239,7 +285,7 @@ input[type="range"]::-webkit-slider-thumb {
   -webkit-appearance: none;
   appearance: none;
   margin-top: -6px;
-  background: #2D72D2;
+  background: #5c6068;
   height: 16px;
   width: 16px;
   border-radius: 50%;
@@ -247,18 +293,18 @@ input[type="range"]::-webkit-slider-thumb {
 }
 
 input[type="range"]::-webkit-slider-thumb:hover {
-  background: #4a8ce0;
+  background: #7a808a;
 }
 
 /* Focus states */
 button:focus-visible,
 input:focus-visible {
-  outline: 2px solid #2D72D2;
+  outline: 2px solid #5c6068;
   outline-offset: 2px;
 }
 
 /* Selection */
 ::selection {
-  background: rgba(45, 114, 210, 0.3);
-  color: #d3e2ee;
+  background: rgba(110, 114, 124, 0.35);
+  color: #f3f4f6;
 }

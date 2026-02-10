@@ -221,9 +221,11 @@ export default function MapView({
   const mapContainer = useRef<HTMLDivElement>(null);
   const map = useRef<maplibregl.Map | null>(null);
   const markers = useRef<maplibregl.Marker[]>([]);
-  const driftFrame = useRef<number | null>(null);
   const styleReadyFrame = useRef<number | null>(null);
   const liveCaptureInterval = useRef<number | null>(null);
+  const styleEpochRef = useRef(0);
+  const styleReadyEpochRef = useRef<number | null>(null);
+  const hasAppliedStyleRef = useRef(false);
   const [isLoaded, setIsLoaded] = useState(false);
   const [isStyleReady, setIsStyleReady] = useState(false);
   const [styleVersion, setStyleVersion] = useState(0);
@@ -290,6 +292,18 @@ export default function MapView({
     }
   }, [mapStyleId, showToast]);
 
+  const markStyleReady = useCallback(() => {
+    if (!map.current || !map.current.isStyleLoaded()) return;
+    const currentEpoch = styleEpochRef.current;
+    if (styleReadyEpochRef.current === currentEpoch) {
+      setIsStyleReady(true);
+      return;
+    }
+    styleReadyEpochRef.current = currentEpoch;
+    setIsStyleReady(true);
+    setStyleVersion((current) => current + 1);
+  }, []);
+
   const deviationGeoJson = useMemo(() => {
     const features = effectiveAlerts
       .filter((alert) => alert.type === 'ROUTE_DEVIATION' || alert.type === 'GEOFENCE_BREACH')
@@ -300,6 +314,8 @@ export default function MapView({
           type: 'Feature',
           properties: {
             severity: alert.severity,
+            shipmentId: shipment.id,
+            trackingCode: shipment.trackingCode,
           },
           geometry: {
             type: 'Point',
@@ -491,37 +507,6 @@ export default function MapView({
   }, [focusMode]);
 
   useEffect(() => {
-    if (!map.current || !isLoaded) return;
-    const mapInstance = map.current;
-    let last = performance.now();
-
-    const tick = (now: number) => {
-      const delta = now - last;
-      last = now;
-      const isInteracting =
-        mapInstance.isMoving() ||
-        mapInstance.isRotating() ||
-        mapInstance.isZooming() ||
-        (mapInstance as any).isPitching?.();
-
-      if (!isInteracting) {
-        const bearing = mapInstance.getBearing();
-        mapInstance.setBearing(bearing + delta * 0.003);
-      }
-
-      driftFrame.current = requestAnimationFrame(tick);
-    };
-
-    driftFrame.current = requestAnimationFrame(tick);
-    return () => {
-      if (driftFrame.current) {
-        cancelAnimationFrame(driftFrame.current);
-        driftFrame.current = null;
-      }
-    };
-  }, [isLoaded]);
-
-  useEffect(() => {
     const captureFromMap = () => {
       if (!map.current || !isLoaded || !isStyleReady) return;
       try {
@@ -589,6 +574,7 @@ export default function MapView({
         antialias: true,
         maxPitch: 65,
         fadeDuration: 0,
+        attributionControl: false,
       });
       map.current = mapInstance;
 
@@ -610,6 +596,10 @@ export default function MapView({
         new maplibregl.NavigationControl(),
         'top-right'
       );
+      mapInstance.addControl(
+        new maplibregl.AttributionControl({ compact: false }),
+        'bottom-right'
+      );
 
       handleLoad = () => {
         console.log('Map loaded successfully');
@@ -618,19 +608,14 @@ export default function MapView({
 
       handleStyleLoading = () => {
         setIsStyleReady(false);
+        styleReadyEpochRef.current = null;
       };
 
       handleStyleLoad = () => {
-        if (mapInstance?.isStyleLoaded()) {
-          setIsStyleReady(true);
-          setStyleVersion((current) => current + 1);
-        }
+        markStyleReady();
       };
       handleStyleData = () => {
-        if (mapInstance?.isStyleLoaded()) {
-          setIsStyleReady(true);
-          setStyleVersion((current) => current + 1);
-        }
+        markStyleReady();
       };
 
       handleError = (e: ErrorEvent) => {
@@ -650,6 +635,7 @@ export default function MapView({
     }
 
     return () => {
+      hasAppliedStyleRef.current = false;
       if (mapInstance) {
         if (handleLoad) mapInstance.off('load', handleLoad);
         if (handleStyleLoading) mapInstance.off('styleloading', handleStyleLoading);
@@ -663,7 +649,7 @@ export default function MapView({
       setIsStyleReady(false);
       setLoadError(null);
     };
-  }, []);
+  }, [markStyleReady]);
 
   // Route deviation heatmap layer
   useEffect(() => {
@@ -1059,17 +1045,22 @@ export default function MapView({
 
   // Swap map style without animation
   useEffect(() => {
-    if (!map.current) return;
+    if (!map.current || !isLoaded) return;
+    if (!hasAppliedStyleRef.current) {
+      hasAppliedStyleRef.current = true;
+      return;
+    }
     setIsStyleReady(false);
     setLoadError(null);
+    styleEpochRef.current += 1;
+    styleReadyEpochRef.current = null;
     map.current.setStyle(styleDefinition, { diff: false });
 
     const startedAt = Date.now();
     const waitForStyleReady = () => {
       if (!map.current) return;
       if (map.current.isStyleLoaded()) {
-        setIsStyleReady(true);
-        setStyleVersion((current) => current + 1);
+        markStyleReady();
         styleReadyFrame.current = null;
         return;
       }
@@ -1087,7 +1078,7 @@ export default function MapView({
         styleReadyFrame.current = null;
       }
     };
-  }, [styleDefinition]);
+  }, [styleDefinition, isLoaded, markStyleReady]);
 
   // Add/update markers
   useEffect(() => {
@@ -1121,10 +1112,10 @@ export default function MapView({
 
       const popup = new maplibregl.Popup({ offset: 25, closeButton: false })
         .setHTML(`
-          <div style="font-family: sans-serif; min-width: 180px;">
-            <div style="font-weight: bold; font-size: 14px;">${shipment.trackingCode}</div>
-            <div style="font-size: 12px; color: #666;">${shipment.origin.name} → ${shipment.destination.name}</div>
-            <div style="font-size: 12px; margin-top: 4px; color: ${color};">${shipment.status}</div>
+          <div style="font-family: 'Instrument Sans', sans-serif; min-width: 220px; color: #e5e7eb;">
+            <div style="font-weight: 700; font-size: 13px; letter-spacing: 0.04em;">${shipment.trackingCode}</div>
+            <div style="font-size: 11px; color: #a6adb7; margin-top: 2px;">${shipment.origin.name} → ${shipment.destination.name}</div>
+            <div style="font-size: 11px; margin-top: 6px; color: ${color}; font-weight: 600;">${shipment.statusLabel || shipment.status}</div>
           </div>
         `);
 
@@ -1132,6 +1123,55 @@ export default function MapView({
       markers.current.push(marker);
     });
   }, [effectiveShipments, selectedShipment, effectiveAlerts, isLoaded, isStyleReady, onShipmentSelect, overlayPalette, styleVersion]);
+
+  // Click interaction for overlay datapoints (deviations/breaches)
+  useEffect(() => {
+    if (!map.current || !isLoaded || !isStyleReady || !map.current.isStyleLoaded()) return;
+    const mapInstance = map.current;
+    const interactiveLayers = ['route-deviation-points', 'geofence-breaches-circle'].filter((layerId) =>
+      Boolean(mapInstance.getLayer(layerId))
+    );
+    if (interactiveLayers.length === 0) return;
+
+    const handleLayerClick = (event: any) => {
+      const props = (event?.features?.[0]?.properties || {}) as Record<string, string>;
+      const shipmentId = props.shipmentId;
+      const trackingCode = props.trackingCode;
+      const shipment = effectiveShipments.find((item) =>
+        (shipmentId && item.id === shipmentId) ||
+        (trackingCode && item.trackingCode === trackingCode)
+      );
+      if (!shipment) return;
+      onShipmentSelect(shipment);
+      showToast(`Focused ${shipment.trackingCode}`);
+    };
+    const handleEnter = () => {
+      if (mapInstance.getCanvas()) {
+        mapInstance.getCanvas().style.cursor = 'pointer';
+      }
+    };
+    const handleLeave = () => {
+      if (mapInstance.getCanvas()) {
+        mapInstance.getCanvas().style.cursor = '';
+      }
+    };
+
+    interactiveLayers.forEach((layerId) => {
+      mapInstance.on('click', layerId, handleLayerClick);
+      mapInstance.on('mouseenter', layerId, handleEnter);
+      mapInstance.on('mouseleave', layerId, handleLeave);
+    });
+    return () => {
+      interactiveLayers.forEach((layerId) => {
+        mapInstance.off('click', layerId, handleLayerClick);
+        mapInstance.off('mouseenter', layerId, handleEnter);
+        mapInstance.off('mouseleave', layerId, handleLeave);
+      });
+      if (mapInstance.getCanvas()) {
+        mapInstance.getCanvas().style.cursor = '';
+      }
+    };
+  }, [effectiveShipments, isLoaded, isStyleReady, onShipmentSelect, showToast, styleVersion]);
 
   // Fly to selected shipment
   useEffect(() => {
