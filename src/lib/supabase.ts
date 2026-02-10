@@ -317,6 +317,7 @@ export interface FabHealthSnapshot {
   metrologyResults: MetrologyResult[];
   vmPredictions: VMPrediction[];
   recipeAdjustments: RecipeAdjustment[];
+  capacitySimulations: CapacitySimulation[];
 }
 
 // ============================================
@@ -683,7 +684,7 @@ export async function fetchFabHealthSnapshot(): Promise<FabHealthSnapshot> {
   const [
     agents, anomalyAlerts, dispatchDecisions, maintenanceLogs,
     facilityStatus, bonderStatus, metrologyResults, vmPredictions,
-    recipeAdjustments,
+    recipeAdjustments, capacitySimulations,
   ] = await Promise.all([
     fetchAegisAgents(),
     fetchAnomalyAlerts(),
@@ -694,11 +695,12 @@ export async function fetchFabHealthSnapshot(): Promise<FabHealthSnapshot> {
     fetchMetrologyResults(),
     fetchVMPredictions(),
     fetchRecipeAdjustments(),
+    fetchCapacitySimulations(),
   ]);
   return {
     agents, anomalyAlerts, dispatchDecisions, maintenanceLogs,
     facilityStatus, bonderStatus, metrologyResults, vmPredictions,
-    recipeAdjustments,
+    recipeAdjustments, capacitySimulations,
   };
 }
 

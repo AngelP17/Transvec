@@ -1,7 +1,8 @@
-import { useState, lazy, Suspense, useEffect } from 'react';
+import { useState, lazy, Suspense, useEffect, useMemo } from 'react';
 import Sidebar from './components/Sidebar';
 import MapView from './components/MapView';
 import SettingsPanel from './components/SettingsPanel';
+import OperatorPanel from './components/OperatorPanel';
 import SystemStatusPanel from './components/SystemStatusPanel';
 import { useSupabaseData } from './hooks/useSupabaseData';
 import { mockShipments, mockAlerts } from './data/mockData';
@@ -32,6 +33,8 @@ function App() {
   const [showDVR, setShowDVR] = useState(false);
   const [initialLoadComplete, setInitialLoadComplete] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [operatorOpen, setOperatorOpen] = useState(false);
+  const [focusMode, setFocusMode] = useState(false);
   const [showGeofences, setShowGeofences] = useState(true);
   const [showRoutes, setShowRoutes] = useState(true);
   const [showBreaches, setShowBreaches] = useState(true);
@@ -55,11 +58,41 @@ function App() {
     }
   }, [loading, initialLoadComplete]);
 
-  // Use mock data as base, overlay Supabase data when available
-  // This prevents UI from disappearing during load
-  const effectiveShipments = shipments.length > 0 ? shipments : mockShipments;
-  const effectiveAlerts = alerts.length > 0 ? alerts : mockAlerts;
-  const isUsingLiveData = shipments.length > 0 && !useMockFallback;
+  useEffect(() => {
+    if (activeTab !== 'OPS' && focusMode) {
+      setFocusMode(false);
+    }
+  }, [activeTab, focusMode]);
+
+  useEffect(() => {
+    if (focusMode) {
+      setSettingsOpen(false);
+      setOperatorOpen(false);
+      setShowDVR(false);
+    }
+  }, [focusMode]);
+
+  // Merge mock data + Supabase data (Supabase takes precedence on collisions)
+  const hasLiveShipments = shipments.length > 0 && !useMockFallback;
+  const hasLiveAlerts = alerts.length > 0 && !useMockFallback;
+
+  const effectiveShipments = useMemo(() => (
+    Array.from(
+      new Map(
+        [...mockShipments, ...shipments].map((shipment) => [shipment.id, shipment])
+      ).values()
+    )
+  ), [shipments]);
+  const effectiveAlerts = useMemo(() => (
+    Array.from(
+      new Map(
+        [...mockAlerts, ...alerts].map((alert) => [alert.id, alert])
+      ).values()
+    )
+  ), [alerts]);
+  const isUsingLiveData = hasLiveShipments || hasLiveAlerts;
+  const isHybridMode = isUsingLiveData && (mockShipments.length > 0 || mockAlerts.length > 0);
+  const isOpsFocusMode = focusMode && activeTab === 'OPS';
 
   const handleAlertClick = (alert: Alert) => {
     setSelectedAlert(alert);
@@ -112,8 +145,10 @@ function App() {
         activeTab={activeTab}
         onTabChange={setActiveTab}
         alertCount={effectiveAlerts.filter(a => !a.acknowledged).length}
-        onOpenSettings={() => setSettingsOpen((prev) => !prev)}
+        onOpenSettings={() => { setSettingsOpen((prev) => !prev); setOperatorOpen(false); setFocusMode(false); }}
         isSettingsOpen={settingsOpen}
+        onOpenOperator={() => { setOperatorOpen((prev) => !prev); setSettingsOpen(false); setFocusMode(false); }}
+        isOperatorOpen={operatorOpen}
       />
 
       {/* Main Content Area */}
@@ -125,10 +160,10 @@ function App() {
         >
 
           {/* Loading indicator - non-intrusive */}
-          <DataLoadingIndicator visible={loading && initialLoadComplete} />
+          {!isOpsFocusMode && <DataLoadingIndicator visible={loading && initialLoadComplete} />}
 
           {/* Error indicator */}
-          {error && (
+          {!isOpsFocusMode && error && (
             <div className="absolute top-4 right-4 z-50 bg-critical/20 border border-critical/50 px-4 py-2 rounded-lg">
               <div className="flex items-center gap-2">
                 <span className="text-critical text-sm">{error}</span>
@@ -143,14 +178,16 @@ function App() {
           )}
 
           {/* Data source indicator */}
-          <div className="absolute bottom-4 right-4 z-50 bg-void-lighter/90 border border-border px-3 py-1.5 rounded-lg">
-            <div className="flex items-center gap-2">
-              <span className={`w-2 h-2 rounded-full ${isUsingLiveData ? 'bg-success animate-pulse' : 'bg-warning'}`} />
-              <span className="text-[10px] text-text-muted uppercase tracking-wider">
-                {isUsingLiveData ? 'Live Data' : 'Demo Mode'}
-              </span>
+          {!isOpsFocusMode && (
+            <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-50 bg-void-lighter/90 border border-border px-3 py-1.5 rounded-lg">
+              <div className="flex items-center gap-2">
+                <span className={`w-2 h-2 rounded-full ${isUsingLiveData ? 'bg-success animate-pulse' : 'bg-warning'}`} />
+                <span className="text-[10px] text-text-muted uppercase tracking-wider">
+                  {isUsingLiveData ? (isHybridMode ? 'Live + Demo' : 'Live Data') : 'Demo Mode'}
+                </span>
+              </div>
             </div>
-          </div>
+          )}
 
           <SystemStatusPanel
             activeTab={activeTab}
@@ -161,6 +198,7 @@ function App() {
             onRefresh={refreshData}
             onToggleOverlays={handleToggleOverlays}
             onExport={handleExport}
+            focusMode={focusMode}
           />
 
           {activeTab === 'OPS' && (
@@ -172,6 +210,8 @@ function App() {
               showGeofences={showGeofences}
               showRoutes={showRoutes}
               showBreaches={showBreaches}
+              focusMode={focusMode}
+              onFocusModeChange={setFocusMode}
             />
           )}
 
@@ -189,6 +229,25 @@ function App() {
                     <div className="text-[11px] uppercase tracking-[0.3em] text-text-muted">Open Alerts</div>
                     <div className="text-2xl font-mono text-critical mt-2">{effectiveAlerts.filter(a => !a.acknowledged).length}</div>
                   </div>
+                  {fabHealth && fabHealth.simulationCount > 0 && (
+                    <div className="rounded-xl border border-border bg-void-lighter/70 p-4 col-span-2">
+                      <div className="text-[11px] uppercase tracking-[0.3em] text-text-muted">Capacity Simulation</div>
+                      <div className="mt-2 flex items-center justify-between text-sm">
+                        <div>
+                          <div className="text-text-bright font-semibold">{fabHealth.latestSimulationName || 'Capacity Forecast'}</div>
+                          <div className="text-[11px] text-text-muted">
+                            {fabHealth.simulationCount} model runs
+                          </div>
+                        </div>
+                        <div className="text-right font-mono text-text-bright">
+                          {fabHealth.meanThroughput != null ? `${fabHealth.meanThroughput.toFixed(0)} wph` : '—'}
+                          {fabHealth.p95Throughput != null && (
+                            <div className="text-[11px] text-text-muted">p95 {fabHealth.p95Throughput.toFixed(0)}</div>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  )}
                   <div className="col-span-2 rounded-xl border border-border bg-void-lighter/70 p-4 text-xs text-text-muted">
                     Use the workbook drawer below to run queries, simulations, and anomaly scans in real time.
                   </div>
@@ -200,6 +259,7 @@ function App() {
           <Suspense fallback={null}>
             {activeTab === 'ONTOLOGY' && (
               <OntologyGraph
+                shipments={effectiveShipments}
                 onNodeSelect={(node) => {
                   if (node.type === 'shipment') {
                     const shipment = effectiveShipments.find(s => s.trackingCode === node.data.label);
@@ -248,8 +308,8 @@ function App() {
         </Suspense>
 
         {/* Shipment Detail Panel */}
-        <Suspense fallback={null}>
-          {selectedShipment && activeTab === 'OPS' && (
+          <Suspense fallback={null}>
+          {selectedShipment && activeTab === 'OPS' && !isOpsFocusMode && (
             <ShipmentDetail
               shipment={selectedShipment}
               onClose={() => setSelectedShipment(null)}
@@ -259,8 +319,8 @@ function App() {
         </Suspense>
 
         {/* DVR Timeline Modal */}
-        <Suspense fallback={null}>
-          {showDVR && selectedShipment && (
+          <Suspense fallback={null}>
+          {showDVR && selectedShipment && !isOpsFocusMode && (
             <DVRTimeline
               shipment={selectedShipment}
               onClose={() => setShowDVR(false)}
@@ -269,7 +329,7 @@ function App() {
         </Suspense>
 
         <SettingsPanel
-          isOpen={settingsOpen}
+          isOpen={settingsOpen && !isOpsFocusMode}
           onClose={() => setSettingsOpen(false)}
           showGeofences={showGeofences}
           showRoutes={showRoutes}
@@ -277,6 +337,13 @@ function App() {
           onToggleGeofences={() => setShowGeofences((prev) => !prev)}
           onToggleRoutes={() => setShowRoutes((prev) => !prev)}
           onToggleBreaches={() => setShowBreaches((prev) => !prev)}
+        />
+
+        <OperatorPanel
+          isOpen={operatorOpen && !isOpsFocusMode}
+          onClose={() => setOperatorOpen(false)}
+          activeTab={activeTab}
+          isUsingLiveData={isUsingLiveData}
         />
       </div>
     </div>

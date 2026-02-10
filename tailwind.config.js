@@ -29,7 +29,7 @@ export default {
         'code-comment': '#7f848e',
       },
       fontFamily: {
-        sans: ['Inter', 'system-ui', 'sans-serif'],
+        sans: ['Instrument Sans', 'system-ui', 'sans-serif'],
         mono: ['JetBrains Mono', 'Menlo', 'monospace'],
         display: ['Instrument Serif', 'serif'],
       },

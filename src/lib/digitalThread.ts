@@ -2,38 +2,44 @@ import type { YieldOpsJob } from './supabase';
 import type { ShipmentDossier } from '../types';
 
 const CARRIER_RULES: Array<{ mode: ShipmentDossier['mode']; carrier: string; route: string; origin: string; destination: string; }> = [
-  { mode: 'SEA', carrier: 'LOGI-PRIME', route: 'SEA-FREIGHT', origin: 'TPE', destination: 'LAX' },
-  { mode: 'AIR', carrier: 'LOGI-AIR', route: 'AIR-FREIGHT', origin: 'TPE', destination: 'SJC' },
-  { mode: 'AIR', carrier: 'LOGI-AIR', route: 'AIR-FREIGHT', origin: 'ICN', destination: 'AUS' },
-  { mode: 'SEA', carrier: 'LOGI-PRIME', route: 'SEA-FREIGHT', origin: 'KAO', destination: 'LAX' },
-  { mode: 'TRUCK', carrier: 'SECURE-LOGIX', route: 'LAND-SECURE', origin: 'PHX', destination: 'DEN' },
-  { mode: 'TRAIN', carrier: 'IRONLINE', route: 'RAIL-SECURE', origin: 'CHI', destination: 'NYC' },
+  { mode: 'SEA', carrier: 'Maersk Semiconductor', route: 'PACIFIC-EXPRESS', origin: 'KAO', destination: 'LAX' },
+  { mode: 'AIR', carrier: 'FedEx Priority', route: 'TRANS-PACIFIC-AIR', origin: 'TPE', destination: 'SFO' },
+  { mode: 'AIR', carrier: 'UPS Express Critical', route: 'KOREA-US-AIR', origin: 'ICN', destination: 'AUS' },
+  { mode: 'SEA', carrier: 'Evergreen Marine', route: 'ASIA-EUROPE-SEA', origin: 'PVG', destination: 'RTM' },
+  { mode: 'TRUCK', carrier: 'XPO Secure Logistics', route: 'US-SOUTHWEST-LAND', origin: 'PHX', destination: 'SFO' },
+  { mode: 'TRAIN', carrier: 'DB Cargo Europe', route: 'EUROPE-RAIL', origin: 'AMS', destination: 'FRA' },
+  { mode: 'AIR', carrier: 'DHL Express', route: 'EUROPE-US-AIR', origin: 'FRA', destination: 'JFK' },
+  { mode: 'SEA', carrier: 'Yang Ming Marine', route: 'TAIWAN-US-SEA', origin: 'KAO', destination: 'LAX' },
 ];
 
 const CLIENT_CODES = [
-  'CLIENT-ALPHA',
-  'CLIENT-BRAVO',
-  'CLIENT-CHARLIE',
-  'CLIENT-DELTA',
-  'CLIENT-ECHO',
-  'CLIENT-FOXTROT',
-  'CLIENT-GOLF',
-  'CLIENT-HOTEL',
-  'CLIENT-INDIA',
-  'CLIENT-JULIET',
-  'CLIENT-OMEGA',
+  'Apple',
+  'NVIDIA',
+  'AMD',
+  'Qualcomm',
+  'Broadcom',
+  'Intel',
+  'MediaTek',
+  'Marvell',
+  'Tesla',
+  'Google',
+  'Microsoft',
+  'Amazon',
+  'Bosch',
+  'NXP',
+  'Sony',
 ];
 
 const OPERATORS = [
-  { id: 'OP-9921', company: 'LOGISTICS-PRIME-LLC', role: 'L5_HAZMAT_DRIVER', rating: 'A+' },
-  { id: 'OP-1187', company: 'AURORA-TRANSIT', role: 'HAZMAT_ESCORT', rating: 'A' },
-  { id: 'OP-7742', company: 'ION-FREIGHT', role: 'SECURE_OPERATOR', rating: 'A-' },
+  { id: 'OPS-4821', company: 'FedEx Custom Critical', role: 'Senior Logistics Operator', rating: 'A+' },
+  { id: 'OPS-2294', company: 'DHL Semiconductor Services', role: 'Hazmat Transport Lead', rating: 'A' },
+  { id: 'OPS-7153', company: 'XPO Secure Logistics', role: 'Cleanroom Freight Specialist', rating: 'A-' },
 ];
 
 const VEHICLES = [
-  { id: 'UNIT-TRK-882', model: 'AUTONOMOUS-RIG-V4', maintenance: 'CLEAR' },
-  { id: 'UNIT-TRN-441', model: 'CONTAINMENT-RAIL-X2', maintenance: 'DUE' },
-  { id: 'UNIT-AIR-109', model: 'CARGO-AIRFRAME-9', maintenance: 'CLEAR' },
+  { id: 'FDX-777F-882', model: 'Boeing 777F Freighter', maintenance: 'CLEAR' },
+  { id: 'MSK-G-441', model: 'Maersk G-Class Container', maintenance: 'DUE' },
+  { id: 'XPO-SEC-109', model: 'Volvo FH16 Climate-Controlled', maintenance: 'CLEAR' },
 ];
 
 function hashString(input: string) {
@@ -46,9 +52,9 @@ function hashString(input: string) {
 }
 
 function sanitizeClient(tag: string | null) {
-  if (!tag) return 'CLIENT-UNKNOWN';
+  if (!tag) return 'Unknown Client';
   const index = hashString(tag) % CLIENT_CODES.length;
-  return CLIENT_CODES[index] || 'CLIENT-UNKNOWN';
+  return CLIENT_CODES[index] || 'Unknown Client';
 }
 
 export function buildShipmentDossier(job: YieldOpsJob, contents: string, statusLabel: string): ShipmentDossier {

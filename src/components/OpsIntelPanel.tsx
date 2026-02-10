@@ -1,5 +1,6 @@
 import { IconAlertTriangle, IconBolt, IconRoute, IconShieldCheck } from '@tabler/icons-react';
 import type { Alert, Shipment } from '../types';
+import { computeGeoRiskScore } from '../lib/geofences';
 
 interface OpsIntelPanelProps {
   shipments: Shipment[];
@@ -44,13 +45,24 @@ export default function OpsIntelPanel({ shipments, alerts }: OpsIntelPanelProps)
     .sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime())
     .slice(0, 5);
 
+  const geoRiskAvg = (() => {
+    const withLocation = shipments.filter((shipment) => shipment.currentLocation);
+    if (withLocation.length === 0) return 0;
+    const total = withLocation.reduce((sum, shipment) => {
+      const risk = computeGeoRiskScore(shipment.currentLocation).score;
+      return sum + risk;
+    }, 0);
+    return total / withLocation.length;
+  })();
+  const geoRiskLevel = geoRiskAvg >= 70 ? 'HIGH' : geoRiskAvg >= 45 ? 'MED' : geoRiskAvg > 0 ? 'LOW' : 'NOMINAL';
+
   return (
-    <div className="absolute right-4 top-20 z-10 w-72 bg-void-lighter/90 border border-border rounded-xl shadow-2xl backdrop-blur">
-      <div className="px-4 py-3 border-b border-border/80">
+    <div className="absolute right-4 top-[420px] z-10 w-72 bg-black/80 border border-white/10 rounded-xl shadow-2xl">
+      <div className="px-4 py-3 border-b border-white/10">
         <div className="flex items-center justify-between">
           <div>
-            <p className="text-[9px] uppercase tracking-[0.3em] text-text-muted">Operational Intelligence</p>
-            <p className="text-[12px] font-semibold text-text-bright">Mission Watch</p>
+            <p className="text-[9px] uppercase tracking-[0.3em] text-white/40">Operational Intelligence</p>
+            <p className="text-[12px] font-semibold text-white">Mission Watch</p>
           </div>
           <div className="flex items-center gap-1 text-[10px] text-warning">
             <IconBolt className="w-3 h-3" />
@@ -59,51 +71,59 @@ export default function OpsIntelPanel({ shipments, alerts }: OpsIntelPanelProps)
         </div>
       </div>
 
-      <div className="px-4 py-3 border-b border-border/60">
+      <div className="px-4 py-3 border-b border-white/10">
         <div className="flex items-center justify-between mb-2">
-          <span className="text-[9px] uppercase tracking-[0.3em] text-text-muted">Risk Score</span>
-          <span className="text-[11px] font-mono font-semibold text-text-bright">{riskScore}%</span>
+          <span className="text-[9px] uppercase tracking-[0.3em] text-white/40">Risk Score</span>
+          <span className="text-[11px] font-mono font-semibold text-white">{riskScore}%</span>
         </div>
-        <div className="h-2 bg-border rounded-full overflow-hidden">
+        <div className="h-2 bg-white/10 rounded-full overflow-hidden">
           <div
             className={`h-full ${riskScore > 60 ? 'bg-critical' : riskScore > 30 ? 'bg-warning' : 'bg-success'}`}
             style={{ width: `${riskScore}%` }}
           />
         </div>
-        <p className="mt-2 text-[9px] text-text-muted">Composite of active alerts and telemetry anomalies.</p>
+        <p className="mt-2 text-[9px] text-white/40">Composite of active alerts and telemetry anomalies.</p>
+        <div className="mt-2 flex items-center justify-between text-[10px]">
+          <span className="text-white/40">Geo Risk Avg</span>
+          <span className={`font-mono ${
+            geoRiskLevel === 'HIGH' ? 'text-critical' : geoRiskLevel === 'MED' ? 'text-warning' : 'text-white/70'
+          }`}>
+            {geoRiskLevel} {geoRiskAvg ? `${geoRiskAvg.toFixed(0)}%` : ''}
+          </span>
+        </div>
       </div>
 
-      <div className="px-4 py-3 border-b border-border/60">
+      <div className="px-4 py-3 border-b border-white/10">
         <div className="flex items-center gap-2 mb-2">
-          <IconRoute className="w-4 h-4 text-accent" />
-          <p className="text-[9px] uppercase tracking-[0.3em] text-text-muted">Carrier Performance</p>
+          <IconRoute className="w-4 h-4 text-white/70" />
+          <p className="text-[9px] uppercase tracking-[0.3em] text-white/40">Carrier Performance</p>
         </div>
         <div className="space-y-2">
           {topCarriers.length === 0 && (
-            <p className="text-[9px] text-text-muted">No carrier telemetry available.</p>
+            <p className="text-[9px] text-white/40">No carrier telemetry available.</p>
           )}
           {topCarriers.map((carrier) => (
-            <div key={carrier.carrier} className="flex items-center justify-between text-[10px] text-text-bright">
+            <div key={carrier.carrier} className="flex items-center justify-between text-[10px] text-white">
               <span>{carrier.carrier}</span>
-              <span className="text-text-muted font-mono">{carrier.count} active</span>
+              <span className="text-white/50 font-mono">{carrier.count} active</span>
             </div>
           ))}
         </div>
       </div>
 
-      <div className="px-4 py-3 border-b border-border/60">
+      <div className="px-4 py-3 border-b border-white/10">
         <div className="flex items-center gap-2 mb-2">
           <IconAlertTriangle className="w-4 h-4 text-warning" />
-          <p className="text-[9px] uppercase tracking-[0.3em] text-text-muted">Mission Timeline</p>
+          <p className="text-[9px] uppercase tracking-[0.3em] text-white/40">Mission Timeline</p>
         </div>
         <div className="space-y-2">
           {timeline.length === 0 && (
-            <p className="text-[9px] text-text-muted">No active incidents.</p>
+            <p className="text-[9px] text-white/40">No active incidents.</p>
           )}
           {timeline.map((event) => (
             <div key={event.id} className="flex flex-col gap-1 text-[10px]">
-              <span className="text-text-bright">{event.message}</span>
-              <span className="text-[9px] text-text-muted font-mono">
+              <span className="text-white">{event.message}</span>
+              <span className="text-[9px] text-white/40 font-mono">
                 {event.severity} • {event.timestamp.toLocaleTimeString()}
               </span>
             </div>
@@ -114,16 +134,16 @@ export default function OpsIntelPanel({ shipments, alerts }: OpsIntelPanelProps)
       <div className="px-4 py-3">
         <div className="flex items-center gap-2 mb-2">
           <IconShieldCheck className="w-4 h-4 text-success" />
-          <p className="text-[9px] uppercase tracking-[0.3em] text-text-muted">Security Watchlist</p>
+          <p className="text-[9px] uppercase tracking-[0.3em] text-white/40">Security Watchlist</p>
         </div>
         <div className="flex flex-wrap gap-2">
-          <span className="px-2 py-1 bg-void border border-success/40 text-success text-[10px] font-medium rounded">
+          <span className="px-2 py-1 bg-black/60 border border-success/40 text-success text-[10px] font-medium rounded">
             Geofence integrity OK
           </span>
-          <span className="px-2 py-1 bg-void border border-border text-text-muted text-[10px] font-medium rounded">
+          <span className="px-2 py-1 bg-black/60 border border-white/10 text-white/50 text-[10px] font-medium rounded">
             No route deviations
           </span>
-          <span className="px-2 py-1 bg-void border border-border text-text-muted text-[10px] font-medium rounded font-mono">
+          <span className="px-2 py-1 bg-black/60 border border-white/10 text-white/50 text-[10px] font-medium rounded font-mono">
             Mesh nodes: {nodeCount}
           </span>
         </div>

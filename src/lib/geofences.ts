@@ -16,6 +16,16 @@ function toDeg(value: number) {
   return (value * 180) / Math.PI;
 }
 
+function haversineKm(a: GeoLocation, b: GeoLocation) {
+  const R = 6371;
+  const dLat = toRad(b.lat - a.lat);
+  const dLon = toRad(b.lng - a.lng);
+  const lat1 = toRad(a.lat);
+  const lat2 = toRad(b.lat);
+  const h = Math.sin(dLat / 2) ** 2 + Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLon / 2) ** 2;
+  return 2 * R * Math.asin(Math.sqrt(h));
+}
+
 function interpolateGreatCircle(origin: GeoLocation, destination: GeoLocation, steps: number) {
   const lat1 = toRad(origin.lat);
   const lon1 = toRad(origin.lng);
@@ -142,12 +152,35 @@ function buildRouteCorridor(origin: GeoLocation, destination: GeoLocation, mode:
   } as GeoJSON.Polygon;
 }
 
-function pointInRing(point: [number, number], ring: [number, number][]) {
+function buildCirclePolygon(center: GeoLocation, radiusKm: number, steps = 48): GeoJSON.Polygon {
+  const kmPerDegLat = 111.32;
+  const kmPerDegLon = 111.32 * Math.cos(toRad(center.lat));
+  const coords: [number, number][] = [];
+
+  for (let i = 0; i <= steps; i += 1) {
+    const angle = (i / steps) * Math.PI * 2;
+    const dxKm = Math.cos(angle) * radiusKm;
+    const dyKm = Math.sin(angle) * radiusKm;
+    const lng = center.lng + dxKm / kmPerDegLon;
+    const lat = center.lat + dyKm / kmPerDegLat;
+    coords.push([lng, lat]);
+  }
+
+  return {
+    type: 'Polygon',
+    coordinates: [coords],
+  };
+}
+
+function pointInRing(point: [number, number], ring: readonly GeoJSON.Position[]) {
   const [x, y] = point;
   let inside = false;
   for (let i = 0, j = ring.length - 1; i < ring.length; j = i += 1) {
-    const [xi, yi] = ring[i];
-    const [xj, yj] = ring[j];
+    const xi = Number(ring[i]?.[0]);
+    const yi = Number(ring[i]?.[1]);
+    const xj = Number(ring[j]?.[0]);
+    const yj = Number(ring[j]?.[1]);
+    if (![xi, yi, xj, yj].every(Number.isFinite)) continue;
     const intersect = yi > y !== yj > y && x < ((xj - xi) * (y - yi)) / (yj - yi + 0.0) + xi;
     if (intersect) inside = !inside;
   }
@@ -222,6 +255,108 @@ export function buildAutoGeofences(shipments: Shipment[]): GeofenceFeatureCollec
     type: 'FeatureCollection',
     features,
   };
+}
+
+export function buildKnownCustomerGeofences(shipments: Shipment[]): GeofenceFeatureCollection | null {
+  if (!shipments.length) return null;
+
+  const destinations = new Map<string, { name: string; location: GeoLocation; mode: Mode }>();
+  shipments.forEach((shipment) => {
+    const destination = shipment.destination?.location;
+    if (!destination) return;
+    const key = shipment.destination.id || shipment.destination.name;
+    if (destinations.has(key)) return;
+    destinations.set(key, {
+      name: shipment.destination.name,
+      location: destination,
+      mode: shipment.dossier?.mode || 'TRUCK',
+    });
+  });
+
+  if (destinations.size === 0) return null;
+
+  const features: GeofenceFeatureCollection['features'] = [];
+  destinations.forEach((dest, key) => {
+    const radiusKmByMode: Record<Mode, number> = {
+      TRUCK: 35,
+      TRAIN: 45,
+      AIR: 110,
+      SEA: 140,
+    };
+    const radiusKm = radiusKmByMode[dest.mode] || 50;
+    const geometry = buildCirclePolygon(dest.location, radiusKm);
+    features.push({
+      type: 'Feature',
+      geometry,
+      properties: {
+        id: `known-${key}`,
+        name: `KNOWN-${dest.name}`,
+        type: 'KNOWN_CUSTOMER',
+      },
+    });
+  });
+
+  return {
+    type: 'FeatureCollection',
+    features,
+  };
+}
+
+const RISK_ZONES = [
+  { id: 'risk-scs', name: 'South China Sea', severity: 'HIGH', center: { lat: 14.0, lng: 114.0 }, radiusKm: 520 },
+  { id: 'risk-taiwan', name: 'Taiwan Strait', severity: 'HIGH', center: { lat: 23.7, lng: 119.8 }, radiusKm: 220 },
+  { id: 'risk-malacca', name: 'Strait of Malacca', severity: 'MED', center: { lat: 2.6, lng: 101.0 }, radiusKm: 220 },
+  { id: 'risk-hormuz', name: 'Strait of Hormuz', severity: 'MED', center: { lat: 26.5, lng: 56.2 }, radiusKm: 220 },
+  { id: 'risk-redsea', name: 'Red Sea', severity: 'HIGH', center: { lat: 20.5, lng: 38.0 }, radiusKm: 380 },
+  { id: 'risk-aden', name: 'Gulf of Aden', severity: 'MED', center: { lat: 12.6, lng: 45.0 }, radiusKm: 260 },
+  { id: 'risk-suez', name: 'Suez Canal', severity: 'LOW', center: { lat: 30.4, lng: 32.4 }, radiusKm: 160 },
+];
+
+type RiskLevel = 'LOW' | 'MED' | 'HIGH' | 'NOMINAL';
+
+export function buildRiskZoneGeofences(): GeofenceFeatureCollection {
+  const features: GeofenceFeatureCollection['features'] = RISK_ZONES.map((zone) => ({
+    type: 'Feature',
+    geometry: buildCirclePolygon(zone.center, zone.radiusKm),
+    properties: {
+      id: zone.id,
+      name: `RISK-${zone.name}`,
+      type: 'RISK_ZONE',
+      severity: zone.severity,
+    },
+  }));
+
+  return {
+    type: 'FeatureCollection',
+    features,
+  };
+}
+
+export function computeGeoRiskScore(location?: GeoLocation | null) {
+  if (!location) {
+    return { score: 0, level: 'NOMINAL' as RiskLevel, zones: [] as string[] };
+  }
+
+  let maxScore = 0;
+  const zones: string[] = [];
+
+  RISK_ZONES.forEach((zone) => {
+    const distance = haversineKm(location, zone.center);
+    if (distance <= zone.radiusKm) {
+      const base = zone.severity === 'HIGH' ? 85 : zone.severity === 'MED' ? 60 : 35;
+      const factor = 1 - distance / zone.radiusKm;
+      const score = base * Math.max(0.4, factor);
+      maxScore = Math.max(maxScore, score);
+      zones.push(zone.name);
+    }
+  });
+
+  let level: RiskLevel = 'NOMINAL';
+  if (maxScore >= 70) level = 'HIGH';
+  else if (maxScore >= 45) level = 'MED';
+  else if (maxScore > 0) level = 'LOW';
+
+  return { score: maxScore, level, zones };
 }
 
 export function buildRouteLineFeatures(shipments: Shipment[]) {

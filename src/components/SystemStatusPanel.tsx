@@ -11,28 +11,29 @@ interface SystemStatusPanelProps {
   onRefresh: () => void;
   onToggleOverlays: () => void;
   onExport: () => void;
+  focusMode?: boolean;
 }
 
 const TAB_COPY: Record<ViewTab, { title: string; subtitle: string; icon: React.ReactNode }> = {
   OPS: {
     title: 'Operational Status',
     subtitle: 'Live geospatial monitoring',
-    icon: <IconMap2 className="w-4 h-4 text-accent" />,
+    icon: <IconMap2 className="w-4 h-4 text-white/80" />,
   },
   ANALYTICS: {
     title: 'Analytics Status',
     subtitle: 'Simulation + telemetry fusion',
-    icon: <IconActivity className="w-4 h-4 text-accent" />,
+    icon: <IconActivity className="w-4 h-4 text-white/80" />,
   },
   ONTOLOGY: {
     title: 'Graph Status',
     subtitle: 'Entity resolution and links',
-    icon: <IconDatabase className="w-4 h-4 text-accent" />,
+    icon: <IconDatabase className="w-4 h-4 text-white/80" />,
   },
   ALERTS: {
     title: 'Alert Status',
     subtitle: 'Incident response queue',
-    icon: <IconAlertTriangle className="w-4 h-4 text-accent" />,
+    icon: <IconAlertTriangle className="w-4 h-4 text-white/80" />,
   },
 };
 
@@ -50,9 +51,13 @@ export default function SystemStatusPanel({
   onRefresh,
   onToggleOverlays,
   onExport,
+  focusMode = false,
 }: SystemStatusPanelProps) {
+  if (focusMode && activeTab === 'OPS') {
+    return null;
+  }
   const copy = TAB_COPY[activeTab];
-  const panelPosition = activeTab === 'OPS' ? 'left-4 top-24 w-64' : 'right-4 top-4 w-72';
+  const panelPosition = 'left-4 top-24 w-64';
   const isOps = activeTab === 'OPS';
 
   const agentStatus = fabHealth
@@ -66,13 +71,13 @@ export default function SystemStatusPanel({
     : 'ok';
 
   return (
-    <div className={`absolute ${panelPosition} z-40 rounded-xl border border-border bg-void-lighter/90 backdrop-blur shadow-xl px-4 py-3`}>
+    <div className={`absolute ${panelPosition} z-30 rounded-xl border border-white/10 bg-black/75 shadow-xl px-4 py-3`}>
       <div className="flex items-center gap-2">
-        {copy.icon}
+        <span className="text-white/80">{copy.icon}</span>
         <div>
-          <div className="text-xs uppercase tracking-[0.3em] text-text-muted">System Status</div>
-          <div className="text-sm font-semibold text-text-bright">{copy.title}</div>
-          <div className="text-[11px] text-text-muted">{copy.subtitle}</div>
+          <div className="text-xs uppercase tracking-[0.3em] text-white/40">System Status</div>
+          <div className="text-sm font-semibold text-white">{copy.title}</div>
+          <div className="text-[11px] text-white/50">{copy.subtitle}</div>
         </div>
         <span className={`ml-auto text-[10px] px-2 py-0.5 rounded-full border ${liveData ? 'border-success text-success' : 'border-warning text-warning'}`}>
           {liveData ? 'LIVE' : 'DEMO'}
@@ -80,10 +85,10 @@ export default function SystemStatusPanel({
       </div>
 
       {/* Action buttons */}
-      <div className="mt-3 flex items-center gap-2 text-[10px] text-text-muted">
+      <div className="mt-3 flex items-center gap-2 text-[10px] text-white/60">
         <button
           onClick={onRefresh}
-          className="flex items-center gap-1 px-2 py-1 rounded border border-border/70 bg-void/70 hover:bg-void-lighter text-text-bright"
+          className="flex items-center gap-1 px-2 py-1 rounded border border-white/10 bg-black/60 hover:bg-white/5 text-white"
         >
           <IconRefresh className="w-3 h-3" />
           Refresh
@@ -92,8 +97,8 @@ export default function SystemStatusPanel({
           onClick={onToggleOverlays}
           disabled={!isOps}
           className={`flex items-center gap-1 px-2 py-1 rounded border ${isOps
-            ? 'border-border/70 bg-void/70 hover:bg-void-lighter text-text-bright'
-            : 'border-border/40 bg-void/40 text-text-muted cursor-not-allowed'
+            ? 'border-white/10 bg-black/60 hover:bg-white/5 text-white'
+            : 'border-white/10 bg-black/30 text-white/30 cursor-not-allowed'
             }`}
           title={isOps ? 'Toggle map overlays' : 'Overlays available in OPS'}
         >
@@ -102,7 +107,7 @@ export default function SystemStatusPanel({
         </button>
         <button
           onClick={onExport}
-          className="flex items-center gap-1 px-2 py-1 rounded border border-border/70 bg-void/70 hover:bg-void-lighter text-text-bright"
+          className="flex items-center gap-1 px-2 py-1 rounded border border-white/10 bg-black/60 hover:bg-white/5 text-white"
         >
           <IconDownload className="w-3 h-3" />
           Export
@@ -111,35 +116,35 @@ export default function SystemStatusPanel({
 
       {/* Core stats */}
       <div className="mt-3 grid grid-cols-2 gap-3 text-[11px]">
-        <div className="rounded-lg border border-border/70 bg-void/70 px-3 py-2">
-          <div className="text-text-muted">Tracked Assets</div>
-          <div className="font-mono text-text-bright text-lg">{shipmentCount}</div>
+        <div className="rounded-lg border border-white/10 bg-black/60 px-3 py-2">
+          <div className="text-white/50">Tracked Assets</div>
+          <div className="font-mono text-white text-lg">{shipmentCount}</div>
         </div>
-        <div className="rounded-lg border border-border/70 bg-void/70 px-3 py-2">
-          <div className="text-text-muted">Open Alerts</div>
+        <div className="rounded-lg border border-white/10 bg-black/60 px-3 py-2">
+          <div className="text-white/50">Open Alerts</div>
           <div className={`font-mono text-lg ${alertCount > 0 ? 'text-critical' : 'text-success'}`}>{alertCount}</div>
         </div>
       </div>
 
       {/* Cross-system health — Sentinel / YieldOps interconnect */}
       {fabHealth && (fabHealth.agentCount > 0 || fabHealth.anomalyAlertCount > 0 || fabHealth.metrologyCount > 0) && (
-        <div className="mt-3 border-t border-border/60 pt-3">
-          <div className="text-[9px] uppercase tracking-[0.3em] text-text-muted mb-2 flex items-center gap-1.5">
-            <IconCpu className="w-3 h-3 text-accent" />
+        <div className="mt-3 border-t border-white/10 pt-3">
+          <div className="text-[9px] uppercase tracking-[0.3em] text-white/40 mb-2 flex items-center gap-1.5">
+            <IconCpu className="w-3 h-3 text-white/70" />
             Fab Interconnect
           </div>
 
           {/* Sentinel agents row */}
           {fabHealth.agentCount > 0 && (
             <div className="flex items-center justify-between text-[10px] mb-1.5">
-              <div className="flex items-center gap-1.5 text-text-muted">
+              <div className="flex items-center gap-1.5 text-white/50">
                 <HealthDot status={agentStatus} />
                 <IconShieldCheck className="w-3 h-3" />
                 Sentinel Agents
               </div>
-              <span className="font-mono text-text-bright">
+              <span className="font-mono text-white">
                 {fabHealth.agentsOnline}/{fabHealth.agentCount}
-                <span className="text-text-muted ml-1">online</span>
+                <span className="text-white/40 ml-1">online</span>
               </span>
             </div>
           )}
@@ -147,7 +152,7 @@ export default function SystemStatusPanel({
           {/* Detections */}
           {fabHealth.totalDetections24h > 0 && (
             <div className="flex items-center justify-between text-[10px] mb-1.5">
-              <span className="text-text-muted ml-4">Detections (24h)</span>
+              <span className="text-white/40 ml-4">Detections (24h)</span>
               <span className="font-mono text-warning">{fabHealth.totalDetections24h}</span>
             </div>
           )}
@@ -155,7 +160,7 @@ export default function SystemStatusPanel({
           {/* Anomaly alerts */}
           {fabHealth.anomalyAlertCount > 0 && (
             <div className="flex items-center justify-between text-[10px] mb-1.5">
-              <div className="flex items-center gap-1.5 text-text-muted">
+              <div className="flex items-center gap-1.5 text-white/50">
                 <HealthDot status={fabHealth.anomalyAlertCount > 5 ? 'critical' : 'warn'} />
                 <IconAlertTriangle className="w-3 h-3" />
                 ML Anomalies
@@ -167,11 +172,11 @@ export default function SystemStatusPanel({
           {/* Facility FFU */}
           {(fabHealth.facilityWarnings > 0 || fabHealth.facilityCritical > 0 || fabHealth.avgFilterLife > 0) && (
             <div className="flex items-center justify-between text-[10px] mb-1.5">
-              <div className="flex items-center gap-1.5 text-text-muted">
+              <div className="flex items-center gap-1.5 text-white/50">
                 <HealthDot status={facilityStatus} />
                 Cleanroom FFU
               </div>
-              <span className="font-mono text-text-bright">
+              <span className="font-mono text-white">
                 {fabHealth.avgFilterLife > 0 ? `${fabHealth.avgFilterLife.toFixed(0)}% filter` : '—'}
               </span>
             </div>
@@ -180,11 +185,11 @@ export default function SystemStatusPanel({
           {/* Assembly bonders */}
           {(fabHealth.bonderWarnings > 0 || fabHealth.bonderCritical > 0 || fabHealth.avgOEE > 0) && (
             <div className="flex items-center justify-between text-[10px] mb-1.5">
-              <div className="flex items-center gap-1.5 text-text-muted">
+              <div className="flex items-center gap-1.5 text-white/50">
                 <HealthDot status={assemblyStatus} />
                 Assembly OEE
               </div>
-              <span className="font-mono text-text-bright">
+              <span className="font-mono text-white">
                 {fabHealth.avgOEE > 0 ? `${fabHealth.avgOEE.toFixed(1)}%` : '—'}
               </span>
             </div>
@@ -193,7 +198,7 @@ export default function SystemStatusPanel({
           {/* Maintenance */}
           {fabHealth.openMaintenanceCount > 0 && (
             <div className="flex items-center justify-between text-[10px] mb-1.5">
-              <div className="flex items-center gap-1.5 text-text-muted">
+              <div className="flex items-center gap-1.5 text-white/50">
                 <HealthDot status="warn" />
                 <IconTool className="w-3 h-3" />
                 Active Maint.
@@ -201,7 +206,7 @@ export default function SystemStatusPanel({
               <span className="font-mono text-warning">
                 {fabHealth.openMaintenanceCount}
                 {fabHealth.totalDowntimeMinutes > 0 && (
-                  <span className="text-text-muted ml-1">({fabHealth.totalDowntimeMinutes}m)</span>
+                  <span className="text-white/40 ml-1">({fabHealth.totalDowntimeMinutes}m)</span>
                 )}
               </span>
             </div>
@@ -210,8 +215,8 @@ export default function SystemStatusPanel({
           {/* VM Predictions + Metrology */}
           {(fabHealth.vmPredictionCount > 0 || fabHealth.metrologyCount > 0) && (
             <div className="flex items-center justify-between text-[10px] mb-1.5">
-              <span className="text-text-muted ml-4">Quality (VM/Metro)</span>
-              <span className="font-mono text-text-bright">
+              <span className="text-white/40 ml-4">Quality (VM/Metro)</span>
+              <span className="font-mono text-white">
                 {fabHealth.avgConfidence > 0 ? `${(fabHealth.avgConfidence * 100).toFixed(0)}% conf` : '—'}
               </span>
             </div>
@@ -220,9 +225,22 @@ export default function SystemStatusPanel({
           {/* Dispatch + Recipe */}
           {(fabHealth.dispatchCount > 0 || fabHealth.pendingRecipeAdjustments > 0) && (
             <div className="flex items-center justify-between text-[10px]">
-              <span className="text-text-muted ml-4">Dispatch / Recipe</span>
-              <span className="font-mono text-text-bright">
+              <span className="text-white/40 ml-4">Dispatch / Recipe</span>
+              <span className="font-mono text-white">
                 {fabHealth.dispatchCount} / {fabHealth.pendingRecipeAdjustments} pending
+              </span>
+            </div>
+          )}
+
+          {/* Capacity Simulation */}
+          {fabHealth.simulationCount > 0 && (
+            <div className="flex items-center justify-between text-[10px]">
+              <span className="text-white/40 ml-4">Capacity Sim</span>
+              <span className="font-mono text-white">
+                {fabHealth.meanThroughput != null ? `${fabHealth.meanThroughput.toFixed(0)} wph` : '---'}
+                {fabHealth.p95Throughput != null && (
+                  <span className="text-white/40 ml-1">(p95: {fabHealth.p95Throughput.toFixed(0)})</span>
+                )}
               </span>
             </div>
           )}

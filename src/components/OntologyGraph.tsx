@@ -1,13 +1,14 @@
-import type { OntologyNode as OntologyNodeType } from '../types';
+import type { OntologyNode as OntologyNodeType, Shipment } from '../types';
 import { SystemKnowledgeGraphViz } from './SystemKnowledgeGraphViz';
 import { useKnowledgeGraphData } from '../hooks/useKnowledgeGraphData';
 
 interface OntologyGraphProps {
   onNodeSelect?: (node: OntologyNodeType) => void;
+  shipments?: Shipment[];
 }
 
-export default function OntologyGraph({ onNodeSelect }: OntologyGraphProps) {
-  const { graph, loading, refresh } = useKnowledgeGraphData();
+export default function OntologyGraph({ onNodeSelect, shipments }: OntologyGraphProps) {
+  const { graph, loading, refresh } = useKnowledgeGraphData({ shipments });
   void onNodeSelect;
 
   return (

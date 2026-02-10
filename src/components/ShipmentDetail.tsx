@@ -19,7 +19,7 @@ const statusColors: Record<string, string> = {
 
 export default function ShipmentDetail({ shipment, onClose, onOpenDVR }: ShipmentDetailProps) {
   const sensors = mockSensors.filter(s => s.shipmentId === shipment.id);
-  const journeyLegs = mockJourneyLegs;
+  const journeyLegs = mockJourneyLegs.filter(leg => leg.trackingCode === shipment.trackingCode);
   const etaBand = computeEtaBand(shipment);
 
   return (
@@ -187,6 +187,9 @@ export default function ShipmentDetail({ shipment, onClose, onOpenDVR }: Shipmen
         <section>
           <h3 className="text-sm font-bold text-text-muted uppercase tracking-wider mb-3">Multi-Modal Journey</h3>
           <div className="space-y-3">
+            {journeyLegs.length === 0 && (
+              <div className="text-sm text-text-muted">No journey legs recorded yet.</div>
+            )}
             {journeyLegs.map((leg, index) => (
               <div key={leg.id} className="flex gap-3">
                 <div className="flex flex-col items-center">

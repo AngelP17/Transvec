@@ -6,30 +6,81 @@ import type {
 import type { Shipment, Alert } from '../types';
 import { buildShipmentDossier } from './digitalThread';
 
-// Zone to location mapping
+// Zone to location mapping — keys match DB `machines.location_zone` values (ZONE_A format)
 const ZONE_LOCATIONS: Record<string, { lat: number; lng: number; name: string }> = {
-  'ZONE A': { lat: 24.7742, lng: 121.0106, name: 'FAB-ALPHA-18' },
-  'ZONE B': { lat: 37.4419, lng: -122.1430, name: 'NODE-BRAVO-12' },
-  'ZONE C': { lat: 45.5152, lng: -122.6784, name: 'FAB-CHARLIE-07' },
-  'ZONE D': { lat: 30.2224, lng: -97.6170, name: 'HUB-DELTA-03' },
-  'ZONE E': { lat: 33.4484, lng: -112.0740, name: 'LOGISTICS-ECHO-01' },
-  'ZONE F': { lat: 47.6062, lng: -122.3321, name: 'PORT-FOXTROT-04' },
-  'ZONE G': { lat: 40.7128, lng: -74.0060, name: 'NODE-GOLF-22' },
-  'ZONE H': { lat: 34.0522, lng: -118.2437, name: 'PORT-HOTEL-09' },
+  // Asia-Pacific Foundries (ZONE_A–F map to DB machines)
+  'ZONE_A': { lat: 24.7742, lng: 121.0106, name: 'TSMC Fab 18 Hsinchu' },
+  'ZONE_B': { lat: 22.6273, lng: 120.3014, name: 'TSMC Fab 22 Kaohsiung' },
+  'ZONE_C': { lat: 37.0745, lng: 127.0094, name: 'Samsung Pyeongtaek' },
+  'ZONE_D': { lat: 36.9940, lng: 126.7828, name: 'Samsung Giheung' },
+  'ZONE_E': { lat: 33.1161, lng: 131.1875, name: 'Micron Hiroshima' },
+  'ZONE_F': { lat: 1.3521, lng: 103.8198, name: 'GlobalFoundries Singapore' },
+  // North America (ZONE_G–H map to DB machines)
+  'ZONE_G': { lat: 33.4152, lng: -111.8315, name: 'Intel Ocotillo AZ' },
+  'ZONE_H': { lat: 45.5152, lng: -122.6784, name: 'Intel Ronler Acres OR' },
+  // Expansion zones (for mock data and future DB growth)
+  'ZONE_I': { lat: 42.9420, lng: -73.8707, name: 'GlobalFoundries Malta NY' },
+  'ZONE_J': { lat: 30.3958, lng: -97.7301, name: 'Samsung Austin TX' },
+  'ZONE_K': { lat: 51.0504, lng: 13.7373, name: 'Infineon Dresden' },
+  'ZONE_L': { lat: 51.4416, lng: 5.4697, name: 'ASML Veldhoven' },
+  'ZONE_M': { lat: 53.2798, lng: -6.3520, name: 'Intel Leixlip Ireland' },
+  'ZONE_N': { lat: 31.8969, lng: 34.8116, name: 'Intel Kiryat Gat Israel' },
 };
 
+// Descriptive location IDs used in transvec_shipments origin_id/destination_id
+const DESCRIPTIVE_LOCATIONS: Record<string, { lat: number; lng: number; name: string }> = {
+  'tsmc-hsinchu': { lat: 24.7742, lng: 121.0106, name: 'TSMC Fab 18 Hsinchu' },
+  'tsmc-kaohsiung': { lat: 22.6273, lng: 120.3014, name: 'TSMC Fab 22 Kaohsiung' },
+  'samsung-pyeongtaek': { lat: 37.0745, lng: 127.0094, name: 'Samsung Pyeongtaek' },
+  'samsung-giheung': { lat: 36.9940, lng: 126.7828, name: 'Samsung Giheung' },
+  'samsung-austin': { lat: 30.3958, lng: -97.7301, name: 'Samsung Austin TX' },
+  'intel-oregon': { lat: 45.5152, lng: -122.6784, name: 'Intel Ronler Acres OR' },
+  'intel-arizona': { lat: 33.4152, lng: -111.8315, name: 'Intel Ocotillo AZ' },
+  'intel-ireland': { lat: 53.2798, lng: -6.3520, name: 'Intel Leixlip Ireland' },
+  'intel-israel': { lat: 31.8969, lng: 34.8116, name: 'Intel Kiryat Gat Israel' },
+  'globalfoundries-malta': { lat: 42.9420, lng: -73.8707, name: 'GlobalFoundries Malta NY' },
+  'globalfoundries-singapore': { lat: 1.3521, lng: 103.8198, name: 'GlobalFoundries Singapore' },
+  'micron-hiroshima': { lat: 33.1161, lng: 131.1875, name: 'Micron Hiroshima' },
+  'infineon-dresden': { lat: 51.0504, lng: 13.7373, name: 'Infineon Dresden' },
+  'asml-veldhoven': { lat: 51.4416, lng: 5.4697, name: 'ASML Veldhoven' },
+  'amd-austin': { lat: 30.2241, lng: -97.7500, name: 'AMD Austin' },
+  'tesla-texas': { lat: 30.2241, lng: -97.7500, name: 'Tesla Austin' },
+  'nvidia-california': { lat: 37.3708, lng: -122.0375, name: 'NVIDIA Santa Clara' },
+  'microsoft-washington': { lat: 47.6205, lng: -122.3493, name: 'Microsoft Redmond' },
+  'apple-cupertino': { lat: 37.3346, lng: -122.0090, name: 'Apple Cupertino' },
+  'qualcomm-sandiego': { lat: 32.8975, lng: -117.1965, name: 'Qualcomm San Diego' },
+  'broadcom-irvine': { lat: 33.6297, lng: -117.7149, name: 'Broadcom Irvine' },
+  'google-mountainview': { lat: 37.4009, lng: -122.1120, name: 'Google Mountain View' },
+  'mediatek-hsinchu': { lat: 24.8066, lng: 120.9686, name: 'MediaTek Hsinchu' },
+  'nxp-eindhoven': { lat: 51.4231, lng: 5.4623, name: 'NXP Eindhoven' },
+};
+
+// Transit hub codes (airports + seaports)
 const CODE_LOCATIONS: Record<string, { lat: number; lng: number; name: string }> = {
-  TPE: { lat: 25.0330, lng: 121.5654, name: 'NODE-TPE-01' },
-  LAX: { lat: 33.9416, lng: -118.4085, name: 'PORT-LAX-01' },
-  SJC: { lat: 37.3639, lng: -121.9289, name: 'PORT-SJC-02' },
-  AUS: { lat: 30.1975, lng: -97.6664, name: 'HUB-AUS-01' },
-  ICN: { lat: 37.4602, lng: 126.4407, name: 'NODE-ICN-01' },
-  KAO: { lat: 22.6273, lng: 120.3014, name: 'NODE-KAO-01' },
-  PHX: { lat: 33.4342, lng: -112.0116, name: 'HUB-PHX-01' },
-  DEN: { lat: 39.8561, lng: -104.6737, name: 'HUB-DEN-01' },
+  // Asia-Pacific
+  TPE: { lat: 25.0330, lng: 121.5654, name: 'Taipei Taoyuan Intl' },
+  KAO: { lat: 22.5726, lng: 120.3462, name: 'Kaohsiung Port' },
+  ICN: { lat: 37.4602, lng: 126.4407, name: 'Incheon Intl' },
+  NRT: { lat: 35.7720, lng: 140.3929, name: 'Narita Cargo Hub' },
+  SIN: { lat: 1.3644, lng: 103.9915, name: 'Singapore Changi' },
+  PVG: { lat: 31.1443, lng: 121.8083, name: 'Shanghai Pudong' },
+  // North America
+  LAX: { lat: 33.9416, lng: -118.4085, name: 'Port of Los Angeles' },
+  SFO: { lat: 37.6213, lng: -122.3790, name: 'SFO Cargo Terminal' },
+  AUS: { lat: 30.1975, lng: -97.6664, name: 'Austin Bergstrom' },
+  PHX: { lat: 33.4342, lng: -112.0116, name: 'Phoenix Sky Harbor' },
+  JFK: { lat: 40.6413, lng: -73.7781, name: 'JFK Cargo Hub' },
+  ORD: { lat: 41.9742, lng: -87.9073, name: "Chicago O'Hare Cargo" },
+  // Europe
+  AMS: { lat: 52.3105, lng: 4.7683, name: 'Amsterdam Schiphol' },
+  FRA: { lat: 50.0379, lng: 8.5622, name: 'Frankfurt Cargo Hub' },
+  DUB: { lat: 53.4264, lng: -6.2499, name: 'Dublin Airport' },
+  RTM: { lat: 51.8854, lng: 4.2925, name: 'Port of Rotterdam' },
+  // Middle East
+  TLV: { lat: 32.0004, lng: 34.8706, name: 'Ben Gurion Intl' },
 };
 
-const DEFAULT_LOCATION = { lat: 39.8283, lng: -98.5795, name: 'CENTRAL-HUB-00' };
+const DEFAULT_LOCATION = { lat: 24.7742, lng: 121.0106, name: 'TSMC Fab 18 Hsinchu' };
 
 const STATUS_MAP: Record<string, string> = {
   'PENDING': 'SCHEDULED',
@@ -41,17 +92,21 @@ const STATUS_MAP: Record<string, string> = {
 };
 
 const CLIENT_CODES = [
-  'CLIENT-ALPHA',
-  'CLIENT-BRAVO',
-  'CLIENT-CHARLIE',
-  'CLIENT-DELTA',
-  'CLIENT-ECHO',
-  'CLIENT-FOXTROT',
-  'CLIENT-GOLF',
-  'CLIENT-HOTEL',
-  'CLIENT-INDIA',
-  'CLIENT-JULIET',
-  'CLIENT-OMEGA',
+  'Apple',
+  'NVIDIA',
+  'AMD',
+  'Qualcomm',
+  'Broadcom',
+  'Intel',
+  'MediaTek',
+  'Marvell',
+  'Tesla',
+  'Google',
+  'Microsoft',
+  'Amazon',
+  'Bosch',
+  'NXP',
+  'Sony',
 ];
 
 function hashString(input: string) {
@@ -64,27 +119,39 @@ function hashString(input: string) {
 }
 
 function sanitizeClientTag(tag: string | null) {
-  if (!tag) return 'CLIENT-UNKNOWN';
+  if (!tag) return 'Unknown Client';
+  // Try direct customer destination match first
+  const upper = tag.toUpperCase();
+  if (CUSTOMER_DESTINATIONS[upper]) return CUSTOMER_DESTINATIONS[upper].name;
   const index = hashString(tag) % CLIENT_CODES.length;
-  return CLIENT_CODES[index] || 'CLIENT-UNKNOWN';
+  return CLIENT_CODES[index] || 'Unknown Client';
 }
 
 function resolveLocationFromId(id: string | null) {
   if (!id) return null;
-  const normalized = id.trim().toUpperCase();
+  const trimmed = id.trim();
+  const lower = trimmed.toLowerCase();
+  const upper = trimmed.toUpperCase();
 
-  if (ZONE_LOCATIONS[normalized]) return ZONE_LOCATIONS[normalized];
-  if (CODE_LOCATIONS[normalized]) return CODE_LOCATIONS[normalized];
+  // Check descriptive IDs first (e.g. "tsmc-hsinchu", "nvidia-california")
+  if (DESCRIPTIVE_LOCATIONS[lower]) return DESCRIPTIVE_LOCATIONS[lower];
 
-  const zoneMatch = Object.values(ZONE_LOCATIONS).find(
-    (location) => location.name.toUpperCase() === normalized
+  // Check zone keys (e.g. "ZONE_A")
+  if (ZONE_LOCATIONS[upper]) return ZONE_LOCATIONS[upper];
+
+  // Check transit hub codes (e.g. "TPE", "LAX")
+  if (CODE_LOCATIONS[upper]) return CODE_LOCATIONS[upper];
+
+  // Fuzzy match against zone/code/descriptive location names
+  const allLocations = [
+    ...Object.values(DESCRIPTIVE_LOCATIONS),
+    ...Object.values(ZONE_LOCATIONS),
+    ...Object.values(CODE_LOCATIONS),
+  ];
+  const nameMatch = allLocations.find(
+    (loc) => loc.name.toUpperCase() === upper
   );
-  if (zoneMatch) return zoneMatch;
-
-  const codeMatch = Object.values(CODE_LOCATIONS).find(
-    (location) => location.name.toUpperCase() === normalized
-  );
-  if (codeMatch) return codeMatch;
+  if (nameMatch) return nameMatch;
 
   return null;
 }
@@ -109,7 +176,7 @@ function progressFromShipmentStatus(status: string) {
 
 // Transform YieldOps job to shipment
 export function transformJobToShipment(job: YieldOpsJob, machine: YieldOpsMachine | null, sensor: SensorReading | null): Shipment {
-  const zoneKey = machine?.location_zone || 'ZONE E';
+  const zoneKey = machine?.location_zone || 'ZONE_A';
   const origin = ZONE_LOCATIONS[zoneKey] || DEFAULT_LOCATION;
   const dest = getDestinationForCustomer(job.customer_tag);
   const current = interpolateLocation(origin, dest, job.status);
@@ -191,24 +258,61 @@ export function transformIncidentToAlert(incident: AegisIncident): Alert {
   };
 }
 
-function getDestinationForCustomer(customerTag: string | null) {
-  const locations = [
-    { lat: 37.3318, lng: -122.0312, name: 'CLIENT-ALPHA' },
-    { lat: 37.3541, lng: -121.9552, name: 'CLIENT-BRAVO' },
-    { lat: 37.3861, lng: -122.0839, name: 'CLIENT-CHARLIE' },
-    { lat: 45.5152, lng: -122.6784, name: 'CLIENT-DELTA' },
-    { lat: 37.4220, lng: -122.0841, name: 'CLIENT-ECHO' },
-    { lat: 47.6062, lng: -122.3321, name: 'CLIENT-FOXTROT' },
-    { lat: 30.2224, lng: -97.6170, name: 'CLIENT-GOLF' },
-    { lat: 43.6150, lng: -116.2023, name: 'CLIENT-HOTEL' },
-    { lat: 33.0198, lng: -117.0834, name: 'CLIENT-INDIA' },
-    { lat: 32.7157, lng: -117.1611, name: 'CLIENT-JULIET' },
-    { lat: 37.4947, lng: -121.9446, name: 'CLIENT-OMEGA' },
-  ];
+// Direct mapping from DB customer_tag to real client destinations
+const CUSTOMER_DESTINATIONS: Record<string, { lat: number; lng: number; name: string }> = {
+  APPLE: { lat: 37.3346, lng: -122.0090, name: 'Apple Cupertino' },
+  NVIDIA: { lat: 37.3708, lng: -122.0375, name: 'NVIDIA Santa Clara' },
+  AMD: { lat: 37.3741, lng: -121.9630, name: 'AMD San Jose' },
+  QUALCOMM: { lat: 32.8975, lng: -117.1965, name: 'Qualcomm San Diego' },
+  BROADCOM: { lat: 33.6297, lng: -117.7149, name: 'Broadcom Irvine' },
+  INTEL: { lat: 45.5231, lng: -122.6765, name: 'Intel Hillsboro' },
+  GOOGLE: { lat: 37.4009, lng: -122.1120, name: 'Google Mountain View' },
+  SAMSUNG: { lat: 30.3958, lng: -97.7301, name: 'Samsung Austin' },
+  MEDIATEK: { lat: 24.8066, lng: 120.9686, name: 'MediaTek Hsinchu' },
+  NXP: { lat: 51.4231, lng: 5.4623, name: 'NXP Eindhoven' },
+  MICRON: { lat: 43.6150, lng: -116.2023, name: 'Micron Boise' },
+  ONSEMI: { lat: 33.4484, lng: -112.0740, name: 'ON Semi Phoenix' },
+  TI: { lat: 32.9900, lng: -96.7500, name: 'TI Dallas' },
+  ST: { lat: 46.2200, lng: 6.1500, name: 'STMicro Geneva' },
+  ADI: { lat: 42.5600, lng: -71.1700, name: 'Analog Devices Wilmington' },
+  XILINX: { lat: 37.3741, lng: -121.9630, name: 'Xilinx San Jose' },
+  NORDIC: { lat: 63.4305, lng: 10.3951, name: 'Nordic Semi Trondheim' },
+  SKYWORKS: { lat: 33.6297, lng: -117.7149, name: 'Skyworks Irvine' },
+  CIRRUS: { lat: 30.2672, lng: -97.7431, name: 'Cirrus Logic Austin' },
+  REALTEK: { lat: 24.8066, lng: 120.9686, name: 'Realtek Hsinchu' },
+  MAXIM: { lat: 37.3741, lng: -121.9630, name: 'Maxim San Jose' },
+  MPS: { lat: 37.3741, lng: -121.9630, name: 'MPS San Jose' },
+  INTERSIL: { lat: 33.6297, lng: -117.7149, name: 'Intersil Irvine' },
+  AMAZON: { lat: 45.5945, lng: -121.1787, name: 'Amazon AWS Oregon' },
+  MICROSOFT: { lat: 47.6205, lng: -122.3493, name: 'Microsoft Redmond' },
+};
 
-  if (!customerTag) return { lat: 39.7392, lng: -104.9903, name: 'CLIENT-UNKNOWN' };
-  const index = hashString(customerTag) % locations.length;
-  return locations[index] || { lat: 39.7392, lng: -104.9903, name: 'CLIENT-UNKNOWN' };
+// Fallback global destinations for unknown customer tags
+const FALLBACK_DESTINATIONS = [
+  { lat: 37.3346, lng: -122.0090, name: 'Apple Cupertino' },
+  { lat: 37.3708, lng: -122.0375, name: 'NVIDIA Santa Clara' },
+  { lat: 32.8975, lng: -117.1965, name: 'Qualcomm San Diego' },
+  { lat: 24.8066, lng: 120.9686, name: 'MediaTek Hsinchu' },
+  { lat: 51.4231, lng: 5.4623, name: 'NXP Eindhoven' },
+  { lat: 46.2200, lng: 6.1500, name: 'STMicro Geneva' },
+  { lat: 35.4437, lng: 139.3711, name: 'Sony Atsugi' },
+  { lat: 48.4917, lng: 9.2078, name: 'Bosch Reutlingen' },
+  { lat: 43.6150, lng: -116.2023, name: 'Micron Boise' },
+  { lat: 47.6205, lng: -122.3493, name: 'Microsoft Redmond' },
+  { lat: 30.2241, lng: -97.7500, name: 'Tesla Austin' },
+  { lat: 63.4305, lng: 10.3951, name: 'Nordic Semi Trondheim' },
+];
+
+function getDestinationForCustomer(customerTag: string | null) {
+  if (!customerTag) return FALLBACK_DESTINATIONS[0];
+
+  // Try direct match (case-insensitive)
+  const upper = customerTag.toUpperCase();
+  if (CUSTOMER_DESTINATIONS[upper]) return CUSTOMER_DESTINATIONS[upper];
+
+  // Hash-based fallback for unknown tags
+  const index = hashString(customerTag) % FALLBACK_DESTINATIONS.length;
+  return FALLBACK_DESTINATIONS[index];
 }
 
 function interpolateLocation(origin: { lat: number; lng: number }, dest: { lat: number; lng: number }, status: string) {
@@ -220,9 +324,18 @@ function interpolateLocation(origin: { lat: number; lng: number }, dest: { lat: 
     case 'COMPLETED': progress = 1; break;
   }
 
+  // Handle antimeridian wrapping for trans-Pacific routes
+  let lngDelta = dest.lng - origin.lng;
+  if (lngDelta > 180) lngDelta -= 360;
+  if (lngDelta < -180) lngDelta += 360;
+
+  let lng = origin.lng + lngDelta * progress;
+  if (lng > 180) lng -= 360;
+  if (lng < -180) lng += 360;
+
   return {
     lat: origin.lat + (dest.lat - origin.lat) * progress,
-    lng: origin.lng + (dest.lng - origin.lng) * progress,
+    lng,
   };
 }
 
@@ -418,12 +531,16 @@ export interface FabHealthSummary {
   avgPredictionError: number;
   pendingRecipeAdjustments: number;
   dispatchCount: number;
+  simulationCount: number;
+  latestSimulationName: string | null;
+  meanThroughput: number | null;
+  p95Throughput: number | null;
 }
 
 export function computeFabHealthSummary(snapshot: FabHealthSnapshot): FabHealthSummary {
   const { agents, anomalyAlerts, dispatchDecisions, maintenanceLogs,
     facilityStatus, bonderStatus, metrologyResults, vmPredictions,
-    recipeAdjustments } = snapshot;
+    recipeAdjustments, capacitySimulations } = snapshot;
 
   // Agents
   const agentsByType: Record<string, number> = {};
@@ -498,5 +615,9 @@ export function computeFabHealthSummary(snapshot: FabHealthSnapshot): FabHealthS
     avgPredictionError,
     pendingRecipeAdjustments: pendingRecipe,
     dispatchCount: dispatchDecisions.length,
+    simulationCount: capacitySimulations?.length ?? 0,
+    latestSimulationName: capacitySimulations?.[0]?.simulation_name ?? null,
+    meanThroughput: capacitySimulations?.[0]?.mean_throughput ?? null,
+    p95Throughput: capacitySimulations?.[0]?.p95_throughput ?? null,
   };
 }
