@@ -11,7 +11,7 @@ interface ShipmentDetailProps {
 
 const statusColors: Record<string, string> = {
   SCHEDULED: '#8a9ba8',
-  IN_TRANSIT: '#2D72D2',
+  IN_TRANSIT: '#b0b5bd',
   DELIVERED: '#0F9960',
   CRITICAL: '#FF4D4F',
   DELAYED: '#FFB000',

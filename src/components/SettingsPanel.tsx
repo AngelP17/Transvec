@@ -25,7 +25,7 @@ function ToggleRow({ label, description, checked, onToggle }: {
       </div>
       <button
         onClick={onToggle}
-        className={`w-11 h-6 rounded-full border transition-colors ${checked ? 'bg-accent/80 border-accent' : 'bg-void border-border'}`}
+        className={`w-11 h-6 rounded-full border transition-colors ${checked ? 'bg-white/25 border-white/40' : 'bg-void border-border'}`}
         aria-pressed={checked}
       >
         <span
@@ -47,10 +47,10 @@ export default function SettingsPanel({
   onToggleBreaches,
 }: SettingsPanelProps) {
   return (
-    <div className={`absolute inset-y-0 right-0 w-[360px] border-l border-border bg-void/95 backdrop-blur-xl shadow-2xl z-40 transition-transform duration-300 ${isOpen ? 'translate-x-0' : 'translate-x-full'}`}>
+    <div className={`absolute inset-y-0 right-0 w-[360px] border-l border-white/10 bg-black/95 backdrop-blur-xl shadow-2xl z-40 transition-transform duration-300 ${isOpen ? 'translate-x-0' : 'translate-x-full'}`}>
       <div className="flex items-center justify-between px-5 py-4 border-b border-border">
         <div className="flex items-center gap-2">
-          <IconAdjustments className="w-5 h-5 text-accent" />
+          <IconAdjustments className="w-5 h-5 text-white/70" />
           <div>
             <div className="text-sm font-semibold tracking-wider text-text-bright">SYSTEM SETTINGS</div>
             <div className="text-[11px] uppercase tracking-[0.3em] text-text-muted">Console</div>
@@ -66,9 +66,9 @@ export default function SettingsPanel({
       </div>
 
       <div className="px-5 py-4 space-y-6 overflow-y-auto h-full">
-        <section className="bg-void-lighter/70 border border-border rounded-xl p-4">
+        <section className="bg-white/[0.03] border border-white/10 rounded-xl p-4">
           <div className="flex items-center gap-2 mb-3">
-            <IconMap2 className="w-4 h-4 text-accent" />
+            <IconMap2 className="w-4 h-4 text-white/70" />
             <div className="text-xs font-semibold tracking-wider text-text-bright">MAP OVERLAYS</div>
           </div>
           <ToggleRow
@@ -91,9 +91,9 @@ export default function SettingsPanel({
           />
         </section>
 
-        <section className="bg-void-lighter/70 border border-border rounded-xl p-4">
+        <section className="bg-white/[0.03] border border-white/10 rounded-xl p-4">
           <div className="flex items-center gap-2 mb-3">
-            <IconDatabase className="w-4 h-4 text-accent" />
+            <IconDatabase className="w-4 h-4 text-white/70" />
             <div className="text-xs font-semibold tracking-wider text-text-bright">DATA SOURCE</div>
           </div>
           <div className="text-xs text-text-muted">Supabase: yieldops-sentinel</div>
@@ -109,14 +109,14 @@ export default function SettingsPanel({
           </div>
         </section>
 
-        <section className="bg-void-lighter/70 border border-border rounded-xl p-4">
+        <section className="bg-white/[0.03] border border-white/10 rounded-xl p-4">
           <div className="flex items-center gap-2 mb-3">
-            <IconBell className="w-4 h-4 text-accent" />
+            <IconBell className="w-4 h-4 text-white/70" />
             <div className="text-xs font-semibold tracking-wider text-text-bright">ALERTS</div>
           </div>
           <div className="text-xs text-text-muted">Geofence breaches are written server-side via edge function.</div>
           <div className="mt-3 rounded-lg border border-border px-3 py-2 text-[11px] text-text-bright">
-            Edge Function: <span className="text-accent font-semibold">geofence-sync</span>
+            Edge Function: <span className="text-text-bright font-semibold">geofence-sync</span>
           </div>
         </section>
       </div>

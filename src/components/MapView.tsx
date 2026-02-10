@@ -182,7 +182,7 @@ function buildRoutePreviewImage(
 // Status colors
 const statusColors: Record<string, string> = {
   SCHEDULED: '#8a9ba8',
-  IN_TRANSIT: '#d3e2ee',
+  IN_TRANSIT: '#c3c7ce',
   DELIVERED: '#0F9960',
   CRITICAL: '#FF4D4F',
   DELAYED: '#FFB000',

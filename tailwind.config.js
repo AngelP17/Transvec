@@ -8,14 +8,14 @@ export default {
     extend: {
       colors: {
         // Palantir-inspired dark theme
-        void: '#10161a',
-        'void-light': '#141d25',
-        'void-lighter': '#1b262e',
-        border: '#2b3b47',
-        'text-muted': '#8a9ba8',
-        'text-bright': '#d3e2ee',
-        accent: '#2D72D2',
-        'accent-hover': '#255dad',
+        void: '#0d0d0f',
+        'void-light': '#121214',
+        'void-lighter': '#17171a',
+        border: '#2a2a2f',
+        'text-muted': '#8a8a92',
+        'text-bright': '#e5e7eb',
+        accent: '#5c6068',
+        'accent-hover': '#464a52',
         success: '#0F9960',
         warning: '#FFB000',
         critical: '#FF4D4F',
