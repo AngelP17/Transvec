@@ -17,6 +17,9 @@ import {
   subscribeToIncidents,
   subscribeToAnomalyAlerts,
   subscribeToMaintenanceLogs,
+  subscribeToTransvecShipments,
+  subscribeToTransvecAlerts,
+  subscribeToGeofences,
 } from '../lib/supabase';
 import {
   transformJobToShipment,
@@ -228,12 +231,18 @@ export function useSupabaseData(): UseSupabaseDataReturn {
     const incidentsSub = subscribeToIncidents(() => loadData(true));
     const anomalySub = subscribeToAnomalyAlerts(() => loadData(true));
     const maintenanceSub = subscribeToMaintenanceLogs(() => loadData(true));
+    const transvecShipmentsSub = subscribeToTransvecShipments(() => loadData(true));
+    const transvecAlertsSub = subscribeToTransvecAlerts(() => loadData(true));
+    const geofenceSub = subscribeToGeofences(() => loadData(true));
     return () => {
       machinesSub.unsubscribe();
       jobsSub.unsubscribe();
       incidentsSub.unsubscribe();
       anomalySub.unsubscribe();
       maintenanceSub.unsubscribe();
+      transvecShipmentsSub.unsubscribe();
+      transvecAlertsSub.unsubscribe();
+      geofenceSub.unsubscribe();
     };
   }, [useMockFallback, loadData]);
 

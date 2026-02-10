@@ -742,3 +742,25 @@ export function subscribeToMaintenanceLogs(callback: (payload: any) => void) {
     .on('postgres_changes', { event: '*', schema: 'public', table: 'maintenance_logs' }, callback)
     .subscribe();
 }
+
+export function subscribeToTransvecShipments(callback: (payload: any) => void) {
+  return supabase
+    .channel('transvec_shipments')
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'transvec_shipments' }, callback)
+    .subscribe();
+}
+
+export function subscribeToTransvecAlerts(callback: (payload: any) => void) {
+  return supabase
+    .channel('transvec_alerts')
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'transvec_alerts' }, callback)
+    .subscribe();
+}
+
+export function subscribeToGeofences(callback: (payload: any) => void) {
+  return supabase
+    .channel('geofences')
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'transvec_geofences' }, callback)
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'geofences' }, callback)
+    .subscribe();
+}
