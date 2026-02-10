@@ -32,7 +32,7 @@ function App() {
   const [selectedAlert, setSelectedAlert] = useState<Alert | null>(null);
   const [showDVR, setShowDVR] = useState(false);
   const [initialLoadComplete, setInitialLoadComplete] = useState(false);
-  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(true);
   const [operatorOpen, setOperatorOpen] = useState(false);
   const [focusMode, setFocusMode] = useState(false);
   const [showGeofences, setShowGeofences] = useState(true);
@@ -319,7 +319,7 @@ function App() {
             </div>
           )}
 
-          {activeTab === 'OPS' && (
+          {activeTab === 'OPS' && !selectedShipment && (
             <SystemStatusPanel
               activeTab={activeTab}
               liveData={isUsingLiveData}
@@ -351,43 +351,66 @@ function App() {
           )}
 
           {activeTab === 'ANALYTICS' && (
-            <div className="absolute inset-0 flex items-center justify-center bg-void-light/60 p-3 sm:p-4">
-              <div className="w-full max-w-[560px] border border-border bg-void/90 rounded-2xl p-4 sm:p-6 shadow-2xl">
-                <div className="text-xs uppercase tracking-[0.4em] text-text-muted mb-2">Analytics Workspace</div>
-                <div className="text-xl font-semibold text-text-bright mb-4">Telemetry & Forecast Console</div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4 text-sm">
-                  <div className="rounded-xl border border-border bg-void-lighter/70 p-4">
-                    <div className="text-[11px] uppercase tracking-[0.3em] text-text-muted">Active Streams</div>
-                    <div className="text-2xl font-mono text-text-bright mt-2">{effectiveShipments.length}</div>
-                  </div>
-                  <div className="rounded-xl border border-border bg-void-lighter/70 p-4">
-                    <div className="text-[11px] uppercase tracking-[0.3em] text-text-muted">Open Alerts</div>
-                    <div className="text-2xl font-mono text-critical mt-2">{effectiveAlerts.filter(a => !a.acknowledged).length}</div>
-                  </div>
-                  {fabHealth && fabHealth.simulationCount > 0 && (
-                    <div className="rounded-xl border border-border bg-void-lighter/70 p-4 col-span-2">
-                      <div className="text-[11px] uppercase tracking-[0.3em] text-text-muted">Capacity Simulation</div>
-                      <div className="mt-2 flex items-center justify-between text-sm">
-                        <div>
-                          <div className="text-text-bright font-semibold">{fabHealth.latestSimulationName || 'Capacity Forecast'}</div>
-                          <div className="text-[11px] text-text-muted">
-                            {fabHealth.simulationCount} model runs
+            <div className="absolute inset-0 z-10 flex flex-col lg:flex-row bg-void-light/60">
+              <div className="flex-1 min-w-0 flex items-center justify-center p-3 sm:p-4">
+                <div className="w-full max-w-[560px] border border-border bg-void/90 rounded-2xl p-4 sm:p-6 shadow-2xl">
+                  <div className="text-xs uppercase tracking-[0.4em] text-text-muted mb-2">Analytics Workspace</div>
+                  <div className="text-xl font-semibold text-text-bright mb-4">Telemetry & Forecast Console</div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4 text-sm">
+                    <div className="rounded-xl border border-border bg-void-lighter/70 p-4">
+                      <div className="text-[11px] uppercase tracking-[0.3em] text-text-muted">Active Streams</div>
+                      <div className="text-2xl font-mono text-text-bright mt-2">{effectiveShipments.length}</div>
+                    </div>
+                    <div className="rounded-xl border border-border bg-void-lighter/70 p-4">
+                      <div className="text-[11px] uppercase tracking-[0.3em] text-text-muted">Open Alerts</div>
+                      <div className="text-2xl font-mono text-critical mt-2">{effectiveAlerts.filter(a => !a.acknowledged).length}</div>
+                    </div>
+                    {fabHealth && fabHealth.simulationCount > 0 && (
+                      <div className="rounded-xl border border-border bg-void-lighter/70 p-4 col-span-2">
+                        <div className="text-[11px] uppercase tracking-[0.3em] text-text-muted">Capacity Simulation</div>
+                        <div className="mt-2 flex items-center justify-between text-sm">
+                          <div>
+                            <div className="text-text-bright font-semibold">{fabHealth.latestSimulationName || 'Capacity Forecast'}</div>
+                            <div className="text-[11px] text-text-muted">
+                              {fabHealth.simulationCount} model runs
+                            </div>
+                          </div>
+                          <div className="text-right font-mono text-text-bright">
+                            {fabHealth.meanThroughput != null ? `${fabHealth.meanThroughput.toFixed(0)} wph` : '—'}
+                            {fabHealth.p95Throughput != null && (
+                              <div className="text-[11px] text-text-muted">p95 {fabHealth.p95Throughput.toFixed(0)}</div>
+                            )}
                           </div>
                         </div>
-                        <div className="text-right font-mono text-text-bright">
-                          {fabHealth.meanThroughput != null ? `${fabHealth.meanThroughput.toFixed(0)} wph` : '—'}
-                          {fabHealth.p95Throughput != null && (
-                            <div className="text-[11px] text-text-muted">p95 {fabHealth.p95Throughput.toFixed(0)}</div>
-                          )}
-                        </div>
                       </div>
+                    )}
+                    <div className="sm:col-span-2 rounded-xl border border-border bg-void-lighter/70 p-4 text-xs text-text-muted">
+                      Use the workbook panel to run queries, simulations, and anomaly scans in real time.
                     </div>
-                  )}
-                  <div className="sm:col-span-2 rounded-xl border border-border bg-void-lighter/70 p-4 text-xs text-text-muted">
-                    Use the workbook drawer below to run queries, simulations, and anomaly scans in real time.
                   </div>
                 </div>
               </div>
+
+              {isWorkbookOpen ? (
+                <Suspense fallback={null}>
+                  <CodeWorkbook
+                    onClose={() => setIsWorkbookOpen(false)}
+                    selectedShipment={selectedShipment}
+                  />
+                </Suspense>
+              ) : (
+                <button
+                  onClick={() => setIsWorkbookOpen(true)}
+                  className="absolute right-4 top-1/2 -translate-y-1/2 bg-void-lighter border border-border rounded-l-lg p-2 text-accent hover:bg-border transition-colors z-20"
+                  title="Open Code Workbook"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <rect width="18" height="18" x="3" y="3" rx="2" ry="2" />
+                    <line x1="9" x2="15" y1="3" y2="3" />
+                    <line x1="9" x2="15" y1="21" y2="21" />
+                  </svg>
+                </button>
+              )}
             </div>
           )}
 
@@ -417,31 +440,7 @@ function App() {
             )}
           </Suspense>
 
-          {/* Toggle Workbook Button */}
-          {activeTab === 'ANALYTICS' && !isWorkbookOpen && (
-            <button
-              onClick={() => setIsWorkbookOpen(true)}
-              className="absolute right-4 top-1/2 -translate-y-1/2 bg-void-lighter border border-border rounded-l-lg p-2 text-accent hover:bg-border transition-colors z-10"
-              title="Open Code Workbook"
-            >
-              <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <rect width="18" height="18" x="3" y="3" rx="2" ry="2" />
-                <line x1="9" x2="15" y1="3" y2="3" />
-                <line x1="9" x2="15" y1="21" y2="21" />
-              </svg>
-            </button>
-          )}
         </div>
-
-        {/* Code Workbook Panel */}
-        <Suspense fallback={null}>
-          {activeTab === 'ANALYTICS' && isWorkbookOpen && (
-            <CodeWorkbook
-              onClose={() => setIsWorkbookOpen(false)}
-              selectedShipment={selectedShipment}
-            />
-          )}
-        </Suspense>
 
         {/* Shipment Detail Panel */}
           <Suspense fallback={null}>
@@ -465,7 +464,7 @@ function App() {
         </Suspense>
 
         <SettingsPanel
-          isOpen={settingsOpen && !isOpsFocusMode}
+          isOpen={settingsOpen && activeTab === 'OPS' && !isOpsFocusMode}
           onClose={() => setSettingsOpen(false)}
           showGeofences={showGeofences}
           showRoutes={showRoutes}
@@ -476,7 +475,7 @@ function App() {
         />
 
         <OperatorPanel
-          isOpen={operatorOpen && !isOpsFocusMode}
+          isOpen={operatorOpen && activeTab === 'OPS' && !isOpsFocusMode}
           onClose={() => setOperatorOpen(false)}
           activeTab={activeTab}
           isUsingLiveData={isUsingLiveData}

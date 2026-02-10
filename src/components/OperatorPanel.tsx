@@ -50,7 +50,7 @@ export default function OperatorPanel({ isOpen, onClose, activeTab, isUsingLiveD
         showToast('Session log exported');
     };
 
-    const panelWidthClass = 'w-[min(360px,calc(100vw-5rem))] sm:w-[min(360px,calc(100vw-6rem))]';
+    const panelWidthClass = 'w-[min(360px,calc(100vw-1rem))]';
 
     return (
         <div className={`absolute inset-y-0 right-0 ${panelWidthClass} border-l border-border bg-void/95 backdrop-blur-xl shadow-2xl z-40 transition-transform duration-300 ${isOpen ? 'translate-x-0' : 'translate-x-full'}`}>

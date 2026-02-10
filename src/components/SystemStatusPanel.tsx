@@ -57,7 +57,7 @@ export default function SystemStatusPanel({
     return null;
   }
   const copy = TAB_COPY[activeTab];
-  const panelPosition = 'left-4 top-24 w-64';
+  const panelPosition = 'left-4 top-24 w-[min(16rem,calc(100%-6rem))] sm:w-64';
   const isOps = activeTab === 'OPS';
 
   const agentStatus = fabHealth
@@ -69,9 +69,14 @@ export default function SystemStatusPanel({
   const assemblyStatus = fabHealth
     ? (fabHealth.bonderCritical > 0 ? 'critical' : fabHealth.bonderWarnings > 0 ? 'warn' : 'ok')
     : 'ok';
+  const agentsOnline = fabHealth?.agentsOnline ?? 0;
+  const agentCount = fabHealth?.agentCount ?? 0;
+  const detections24h = fabHealth?.totalDetections24h ?? 0;
+  const dispatchCount = fabHealth?.dispatchCount ?? 0;
+  const pendingRecipeAdjustments = fabHealth?.pendingRecipeAdjustments ?? 0;
 
   return (
-    <div className={`absolute ${panelPosition} z-30 rounded-xl border border-white/10 bg-black/75 shadow-xl px-4 py-3`}>
+    <div className={`absolute ${panelPosition} max-h-[calc(100vh-7.5rem)] overflow-y-auto z-30 rounded-xl border border-white/10 bg-black/75 shadow-xl px-4 py-3`}>
       <div className="flex items-center gap-2">
         <span className="text-white/80">{copy.icon}</span>
         <div>
@@ -85,7 +90,7 @@ export default function SystemStatusPanel({
       </div>
 
       {/* Action buttons */}
-      <div className="mt-3 flex items-center gap-2 text-[10px] text-white/60">
+      <div className="mt-3 flex flex-wrap items-center gap-2 text-[10px] text-white/60">
         <button
           onClick={onRefresh}
           className="flex items-center gap-1 px-2 py-1 rounded border border-white/10 bg-black/60 hover:bg-white/5 text-white"
@@ -127,38 +132,32 @@ export default function SystemStatusPanel({
       </div>
 
       {/* Cross-system health — Sentinel / YieldOps interconnect */}
-      {fabHealth && (fabHealth.agentCount > 0 || fabHealth.anomalyAlertCount > 0 || fabHealth.metrologyCount > 0) && (
+      {activeTab === 'OPS' && (
         <div className="mt-3 border-t border-white/10 pt-3">
           <div className="text-[9px] uppercase tracking-[0.3em] text-white/40 mb-2 flex items-center gap-1.5">
             <IconCpu className="w-3 h-3 text-white/70" />
             Fab Interconnect
           </div>
 
-          {/* Sentinel agents row */}
-          {fabHealth.agentCount > 0 && (
-            <div className="flex items-center justify-between text-[10px] mb-1.5">
-              <div className="flex items-center gap-1.5 text-white/50">
-                <HealthDot status={agentStatus} />
-                <IconShieldCheck className="w-3 h-3" />
-                Sentinel Agents
-              </div>
-              <span className="font-mono text-white">
-                {fabHealth.agentsOnline}/{fabHealth.agentCount}
-                <span className="text-white/40 ml-1">online</span>
-              </span>
+          <div className="flex items-center justify-between text-[10px] mb-1.5">
+            <div className="flex items-center gap-1.5 text-white/50">
+              <HealthDot status={agentStatus} />
+              <IconShieldCheck className="w-3 h-3" />
+              Sentinel Agents
             </div>
-          )}
+            <span className="font-mono text-white">
+              {agentsOnline}/{agentCount}
+              <span className="text-white/40 ml-1">online</span>
+            </span>
+          </div>
 
-          {/* Detections */}
-          {fabHealth.totalDetections24h > 0 && (
-            <div className="flex items-center justify-between text-[10px] mb-1.5">
-              <span className="text-white/40 ml-4">Detections (24h)</span>
-              <span className="font-mono text-warning">{fabHealth.totalDetections24h}</span>
-            </div>
-          )}
+          <div className="flex items-center justify-between text-[10px] mb-1.5">
+            <span className="text-white/40 ml-4">Detections (24h)</span>
+            <span className="font-mono text-warning">{detections24h}</span>
+          </div>
 
           {/* Anomaly alerts */}
-          {fabHealth.anomalyAlertCount > 0 && (
+          {fabHealth && fabHealth.anomalyAlertCount > 0 && (
             <div className="flex items-center justify-between text-[10px] mb-1.5">
               <div className="flex items-center gap-1.5 text-white/50">
                 <HealthDot status={fabHealth.anomalyAlertCount > 5 ? 'critical' : 'warn'} />
@@ -170,7 +169,7 @@ export default function SystemStatusPanel({
           )}
 
           {/* Facility FFU */}
-          {(fabHealth.facilityWarnings > 0 || fabHealth.facilityCritical > 0 || fabHealth.avgFilterLife > 0) && (
+          {fabHealth && (fabHealth.facilityWarnings > 0 || fabHealth.facilityCritical > 0 || fabHealth.avgFilterLife > 0) && (
             <div className="flex items-center justify-between text-[10px] mb-1.5">
               <div className="flex items-center gap-1.5 text-white/50">
                 <HealthDot status={facilityStatus} />
@@ -183,7 +182,7 @@ export default function SystemStatusPanel({
           )}
 
           {/* Assembly bonders */}
-          {(fabHealth.bonderWarnings > 0 || fabHealth.bonderCritical > 0 || fabHealth.avgOEE > 0) && (
+          {fabHealth && (fabHealth.bonderWarnings > 0 || fabHealth.bonderCritical > 0 || fabHealth.avgOEE > 0) && (
             <div className="flex items-center justify-between text-[10px] mb-1.5">
               <div className="flex items-center gap-1.5 text-white/50">
                 <HealthDot status={assemblyStatus} />
@@ -196,7 +195,7 @@ export default function SystemStatusPanel({
           )}
 
           {/* Maintenance */}
-          {fabHealth.openMaintenanceCount > 0 && (
+          {fabHealth && fabHealth.openMaintenanceCount > 0 && (
             <div className="flex items-center justify-between text-[10px] mb-1.5">
               <div className="flex items-center gap-1.5 text-white/50">
                 <HealthDot status="warn" />
@@ -213,7 +212,7 @@ export default function SystemStatusPanel({
           )}
 
           {/* VM Predictions + Metrology */}
-          {(fabHealth.vmPredictionCount > 0 || fabHealth.metrologyCount > 0) && (
+          {fabHealth && (fabHealth.vmPredictionCount > 0 || fabHealth.metrologyCount > 0) && (
             <div className="flex items-center justify-between text-[10px] mb-1.5">
               <span className="text-white/40 ml-4">Quality (VM/Metro)</span>
               <span className="font-mono text-white">
@@ -223,17 +222,15 @@ export default function SystemStatusPanel({
           )}
 
           {/* Dispatch + Recipe */}
-          {(fabHealth.dispatchCount > 0 || fabHealth.pendingRecipeAdjustments > 0) && (
-            <div className="flex items-center justify-between text-[10px]">
+          <div className="flex items-center justify-between text-[10px]">
               <span className="text-white/40 ml-4">Dispatch / Recipe</span>
               <span className="font-mono text-white">
-                {fabHealth.dispatchCount} / {fabHealth.pendingRecipeAdjustments} pending
+                {dispatchCount} / {pendingRecipeAdjustments} pending
               </span>
             </div>
-          )}
 
           {/* Capacity Simulation */}
-          {fabHealth.simulationCount > 0 && (
+          {fabHealth && fabHealth.simulationCount > 0 && (
             <div className="flex items-center justify-between text-[10px]">
               <span className="text-white/40 ml-4">Capacity Sim</span>
               <span className="font-mono text-white">

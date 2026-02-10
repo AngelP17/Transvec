@@ -164,7 +164,7 @@ export function SystemKnowledgeGraphViz({ data, onGenerate, loading }: SystemKno
         ))}
       </div>
 
-      <div ref={containerRef} className="h-[520px] bg-gradient-to-b from-void to-void-lighter/40">
+      <div ref={containerRef} className="h-[420px] sm:h-[520px] bg-gradient-to-b from-void to-void-lighter/40">
         <ForceGraph2D
           ref={fgRef}
           graphData={graphData}

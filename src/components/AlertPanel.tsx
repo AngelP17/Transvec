@@ -85,6 +85,10 @@ export default function AlertPanel({ alerts, onAlertClick, selectedAlert, onAckn
   const [triageMap, setTriageMap] = useState<Record<string, { status: TriageStatus; assignee?: string; updatedAt: number }>>({});
   const [actionFeedback, setActionFeedback] = useState<string | null>(null);
 
+  useEffect(() => {
+    setActionFeedback(null);
+  }, [selectedAlert?.id]);
+
   const resolveTriage = (alertId: string) =>
     triageMap[alertId] || { status: 'UNASSIGNED' as TriageStatus, assignee: '', updatedAt: 0 };
 

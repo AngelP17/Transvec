@@ -23,6 +23,7 @@ export default function DVRTimeline({ shipment, onClose }: DVRTimelineProps) {
   const telemetryHistory = useRef<TelemetryReading[]>(generateTelemetryHistory(shipment.id, 200));
   const totalPoints = telemetryHistory.current.length;
   const currentData = telemetryHistory.current[currentIndex];
+  const graphWidth = typeof window !== 'undefined' ? Math.max(240, Math.min(380, window.innerWidth - 56)) : 380;
   
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -115,7 +116,7 @@ export default function DVRTimeline({ shipment, onClose }: DVRTimelineProps) {
 
   return (
     <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-2 sm:p-4 lg:p-8">
-      <div className="w-full max-w-6xl bg-void-lighter border border-border rounded-xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
+      <div className="w-full max-w-6xl bg-void-lighter border border-border rounded-xl shadow-2xl overflow-hidden flex flex-col max-h-[95vh] sm:max-h-[90vh]">
         {/* Header */}
         <div className="flex items-center justify-between p-4 border-b border-border bg-void">
           <div className="flex items-center gap-2 sm:gap-4 min-w-0">
@@ -185,7 +186,7 @@ export default function DVRTimeline({ shipment, onClose }: DVRTimelineProps) {
         {/* Main Content */}
         <div className="flex-1 flex flex-col lg:flex-row overflow-hidden">
           {/* Left: Map View (Simplified) */}
-          <div className="flex-1 relative bg-black">
+          <div className="flex-1 relative bg-black min-h-[220px]">
             <div className="absolute inset-0 grid-pattern opacity-30" />
             
             {/* Current Position Indicator */}
@@ -263,7 +264,7 @@ export default function DVRTimeline({ shipment, onClose }: DVRTimelineProps) {
                     }>
                       <DVRGraph3D 
                         data={shockGraphData}
-                        width={380}
+                        width={graphWidth}
                         height={100}
                         className="rounded"
                       />
@@ -301,7 +302,7 @@ export default function DVRTimeline({ shipment, onClose }: DVRTimelineProps) {
                     }>
                       <DVRGraph3D 
                         data={tempGraphData}
-                        width={380}
+                        width={graphWidth}
                         height={100}
                         className="rounded"
                       />
@@ -337,7 +338,7 @@ export default function DVRTimeline({ shipment, onClose }: DVRTimelineProps) {
                     }>
                       <DVRGraph3D 
                         data={vibrationGraphData}
-                        width={380}
+                        width={graphWidth}
                         height={100}
                         className="rounded"
                       />
@@ -387,8 +388,8 @@ export default function DVRTimeline({ shipment, onClose }: DVRTimelineProps) {
         </div>
 
         {/* Timeline Control */}
-        <div className="border-t border-border bg-void p-4">
-          <div className="flex items-center gap-4">
+        <div className="border-t border-border bg-void p-3 sm:p-4">
+          <div className="flex flex-wrap items-center gap-3 sm:gap-4">
             {/* Play/Pause */}
             <button
               onClick={() => setIsPlaying(!isPlaying)}
@@ -441,11 +442,11 @@ export default function DVRTimeline({ shipment, onClose }: DVRTimelineProps) {
             </div>
 
             {/* Progress */}
-            <div className="text-right">
+            <div className="text-right min-w-[72px] ml-auto">
               <div className="text-sm font-mono text-text-bright">
                 {currentIndex + 1} / {totalPoints}
               </div>
-      <div className="text-xs text-text-muted">
+              <div className="text-xs text-text-muted">
                 {((currentIndex / (totalPoints - 1)) * 100).toFixed(0)}%
               </div>
             </div>

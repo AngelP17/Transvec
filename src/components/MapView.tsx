@@ -257,7 +257,7 @@ export default function MapView({
   const yieldOpsHref = `${stripTrailingSlash(import.meta.env.VITE_YIELDOPS_BASE_URL || DEFAULT_YIELDOPS_BASE_URL)}/?source=transvec`;
   const mapContainer = useRef<HTMLDivElement>(null);
   const map = useRef<maplibregl.Map | null>(null);
-  const markers = useRef<maplibregl.Marker[]>([]);
+  const clickPopup = useRef<maplibregl.Popup | null>(null);
   const styleReadyFrame = useRef<number | null>(null);
   const liveCaptureInterval = useRef<number | null>(null);
   const styleEpochRef = useRef(0);
@@ -331,7 +331,9 @@ export default function MapView({
   }, [mapStyleId, showToast]);
 
   const markStyleReady = useCallback(() => {
-    if (!map.current || !map.current.isStyleLoaded()) return;
+    if (!map.current) return;
+    const style = map.current.getStyle();
+    if (!style || !Array.isArray(style.layers)) return;
     const currentEpoch = styleEpochRef.current;
     if (styleReadyEpochRef.current === currentEpoch) {
       setIsStyleReady(true);
@@ -446,6 +448,35 @@ export default function MapView({
       setIsRightRailOpen(false);
     }
   }, [focusMode, onShipmentSelect]);
+
+  const showShipmentPopup = useCallback((shipment: Shipment, lng: number, lat: number) => {
+    if (!map.current) return;
+    const telemetry = shipment.telemetry;
+    const statusLabel = shipment.statusLabel || shipment.status;
+
+    if (!clickPopup.current) {
+      clickPopup.current = new maplibregl.Popup({ offset: 18, closeButton: false, closeOnMove: false });
+    }
+
+    clickPopup.current
+      .setLngLat([lng, lat])
+      .setHTML(`
+        <div style="font-family:'Instrument Sans',sans-serif;min-width:240px;color:#e5e7eb">
+          <div style="display:flex;justify-content:space-between;gap:10px;align-items:center">
+            <div style="font-weight:700;font-size:13px;letter-spacing:0.03em">${shipment.trackingCode}</div>
+            <div style="font-size:10px;padding:2px 8px;border:1px solid rgba(255,255,255,0.15);border-radius:999px">${statusLabel}</div>
+          </div>
+          <div style="font-size:11px;color:#9aa3ad;margin-top:4px">${shipment.origin.name} → ${shipment.destination.name}</div>
+          <div style="margin-top:8px;display:grid;grid-template-columns:1fr 1fr;gap:6px;font-size:11px">
+            <div style="background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);padding:6px;border-radius:8px">Shock<br/><strong>${(telemetry.shock ?? 0).toFixed(2)} G</strong></div>
+            <div style="background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);padding:6px;border-radius:8px">Temp<br/><strong>${(telemetry.temperature ?? 0).toFixed(1)} °C</strong></div>
+            <div style="background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);padding:6px;border-radius:8px">Humidity<br/><strong>${Math.round(telemetry.humidity ?? 0)} %</strong></div>
+            <div style="background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);padding:6px;border-radius:8px">Vibration<br/><strong>${Math.round(telemetry.vibration ?? 0)} Hz</strong></div>
+          </div>
+        </div>
+      `)
+      .addTo(map.current);
+  }, []);
 
   const handleLocationSubmit = useCallback((event: FormEvent) => {
     event.preventDefault();
@@ -639,6 +670,7 @@ export default function MapView({
       handleLoad = () => {
         console.log('Map loaded successfully');
         setIsLoaded(true);
+        markStyleReady();
       };
 
       handleStyleLoading = () => {
@@ -688,7 +720,7 @@ export default function MapView({
 
   // Route deviation heatmap layer
   useEffect(() => {
-    if (!map.current || !isLoaded || !isStyleReady || !map.current.isStyleLoaded()) return;
+    if (!map.current || !isLoaded || !isStyleReady) return;
     const mapInstance = map.current;
     const sourceId = "route-deviation-source";
     const layerId = "route-deviation-heat";
@@ -772,7 +804,7 @@ export default function MapView({
 
   // Geofence polygons overlay
   useEffect(() => {
-    if (!map.current || !isLoaded || !isStyleReady || !map.current.isStyleLoaded()) return;
+    if (!map.current || !isLoaded || !isStyleReady) return;
     const mapInstance = map.current;
     const sourceId = 'geofence-polygons';
     const fillLayerId = 'geofence-fill';
@@ -836,7 +868,7 @@ export default function MapView({
 
   // Known customer zones overlay
   useEffect(() => {
-    if (!map.current || !isLoaded || !isStyleReady || !map.current.isStyleLoaded()) return;
+    if (!map.current || !isLoaded || !isStyleReady) return;
     const mapInstance = map.current;
     const sourceId = 'known-customer-zones';
     const fillLayerId = 'known-customer-fill';
@@ -901,7 +933,7 @@ export default function MapView({
 
   // Geo-risk zones overlay
   useEffect(() => {
-    if (!map.current || !isLoaded || !isStyleReady || !map.current.isStyleLoaded()) return;
+    if (!map.current || !isLoaded || !isStyleReady) return;
     const mapInstance = map.current;
     const sourceId = 'geo-risk-zones';
     const fillLayerId = 'geo-risk-fill';
@@ -966,7 +998,7 @@ export default function MapView({
 
   // Geofence breach markers
   useEffect(() => {
-    if (!map.current || !isLoaded || !isStyleReady || !map.current.isStyleLoaded()) return;
+    if (!map.current || !isLoaded || !isStyleReady) return;
     const mapInstance = map.current;
     const sourceId = 'geofence-breaches';
     const circleLayerId = 'geofence-breaches-circle';
@@ -1019,7 +1051,7 @@ export default function MapView({
 
   // Route path lines by mode
   useEffect(() => {
-    if (!map.current || !isLoaded || !isStyleReady || !map.current.isStyleLoaded()) return;
+    if (!map.current || !isLoaded || !isStyleReady) return;
     const mapInstance = map.current;
     const sourceId = 'route-paths';
     const layers = [
@@ -1115,55 +1147,122 @@ export default function MapView({
     };
   }, [styleDefinition, isLoaded, markStyleReady]);
 
-  // Add/update markers
+  // Shipment point layer (always-on, replaces fragile DOM markers)
   useEffect(() => {
-    if (!map.current || !isLoaded || !isStyleReady || !map.current.isStyleLoaded()) return;
+    if (!map.current || !isLoaded || !isStyleReady) return;
+    const mapInstance = map.current;
+    const sourceId = 'shipment-points';
+    const haloLayerId = 'shipment-points-halo';
+    const layerId = 'shipment-points-circle';
 
-    // Clear existing markers
-    markers.current.forEach(marker => marker.remove());
-    markers.current = [];
+    const features = effectiveShipments
+      .filter((shipment) => Boolean(shipment.currentLocation))
+      .map((shipment) => {
+        const hasCriticalAlert = effectiveAlerts.some(
+          (alert) => alert.shipmentId === shipment.id && alert.severity === 'CRITICAL' && !alert.acknowledged
+        );
+        const geoRisk = computeGeoRiskScore(shipment.currentLocation);
+        return {
+          type: 'Feature',
+          properties: {
+            shipmentId: shipment.id,
+            trackingCode: shipment.trackingCode,
+            status: shipment.status,
+            hasCriticalAlert,
+            isSelected: selectedShipment?.id === shipment.id,
+            riskLevel: geoRisk.level,
+          },
+          geometry: {
+            type: 'Point',
+            coordinates: [shipment.currentLocation!.lng, shipment.currentLocation!.lat],
+          },
+        };
+      });
 
-    effectiveShipments.forEach(shipment => {
-      if (!shipment.currentLocation) return;
+    const data = {
+      type: 'FeatureCollection',
+      features,
+    } as GeoJSON.FeatureCollection;
 
-      const hasCriticalAlert = effectiveAlerts.some(
-        a => a.shipmentId === shipment.id && a.severity === 'CRITICAL' && !a.acknowledged
-      );
-      const color = hasCriticalAlert ? '#FF4D4F' : statusColors[shipment.status] || '#8a9ba8';
-      const isSelected = selectedShipment?.id === shipment.id;
-      const geoRisk = computeGeoRiskScore(shipment.currentLocation);
-      const markerTheme = overlayPalette.isBright ? ' is-bright' : ' is-dark';
+    const beforeId = getOverlayInsertBeforeId(mapInstance);
+    const addLayer = (layer: any) => {
+      if (beforeId && mapInstance.getLayer(beforeId)) {
+        mapInstance.addLayer(layer, beforeId);
+      } else {
+        mapInstance.addLayer(layer);
+      }
+    };
 
-      const el = document.createElement('div');
-      el.className = `map-marker${isSelected ? ' is-selected' : ''}${hasCriticalAlert ? ' is-critical' : ''}${geoRisk.level === 'HIGH' ? ' risk-high' : geoRisk.level === 'MED' ? ' risk-med' : ''
-        }${markerTheme}`;
-      el.style.setProperty('--marker-color', color);
+    if (!mapInstance.getSource(sourceId)) {
+      mapInstance.addSource(sourceId, {
+        type: 'geojson',
+        data,
+      });
 
-      el.addEventListener('click', () => onShipmentSelect(shipment));
+      addLayer({
+        id: haloLayerId,
+        type: 'circle',
+        source: sourceId,
+        paint: {
+          'circle-radius': [
+            'case',
+            ['get', 'isSelected'], 14,
+            ['==', ['get', 'riskLevel'], 'HIGH'], 12,
+            ['==', ['get', 'riskLevel'], 'MED'], 11,
+            10,
+          ],
+          'circle-color': [
+            'case',
+            ['get', 'hasCriticalAlert'], 'rgba(255,77,79,0.35)',
+            ['==', ['get', 'riskLevel'], 'HIGH'], 'rgba(255,77,79,0.24)',
+            ['==', ['get', 'riskLevel'], 'MED'], 'rgba(255,176,0,0.22)',
+            'rgba(229,231,235,0.16)',
+          ],
+          'circle-blur': 0.45,
+        },
+      });
 
-      const marker = new maplibregl.Marker(el)
-        .setLngLat([shipment.currentLocation.lng, shipment.currentLocation.lat])
-        .addTo(map.current!);
-
-      const popup = new maplibregl.Popup({ offset: 25, closeButton: false })
-        .setHTML(`
-          <div style="font-family: 'Instrument Sans', sans-serif; min-width: 220px; color: #e5e7eb;">
-            <div style="font-weight: 700; font-size: 13px; letter-spacing: 0.04em;">${shipment.trackingCode}</div>
-            <div style="font-size: 11px; color: #a6adb7; margin-top: 2px;">${shipment.origin.name} → ${shipment.destination.name}</div>
-            <div style="font-size: 11px; margin-top: 6px; color: ${color}; font-weight: 600;">${shipment.statusLabel || shipment.status}</div>
-          </div>
-        `);
-
-      marker.setPopup(popup);
-      markers.current.push(marker);
-    });
-  }, [effectiveShipments, selectedShipment, effectiveAlerts, isLoaded, isStyleReady, onShipmentSelect, overlayPalette, styleVersion]);
+      addLayer({
+        id: layerId,
+        type: 'circle',
+        source: sourceId,
+        paint: {
+          'circle-radius': [
+            'case',
+            ['get', 'isSelected'], 7,
+            5,
+          ],
+          'circle-color': [
+            'case',
+            ['get', 'hasCriticalAlert'], '#FF4D4F',
+            ['==', ['get', 'status'], 'DELIVERED'], '#0F9960',
+            ['==', ['get', 'status'], 'HELD_CUSTOMS'], '#FFB000',
+            ['==', ['get', 'status'], 'DELAYED'], '#FFB000',
+            ['==', ['get', 'status'], 'CRITICAL'], '#FF4D4F',
+            '#d1d5db',
+          ],
+          'circle-stroke-color': overlayPalette.isBright ? '#0b0f14' : '#f8fafc',
+          'circle-stroke-width': [
+            'case',
+            ['get', 'isSelected'], 2.2,
+            1.4,
+          ],
+        },
+      });
+    } else {
+      const source = mapInstance.getSource(sourceId) as maplibregl.GeoJSONSource;
+      source.setData(data);
+      if (mapInstance.getLayer(layerId)) {
+        mapInstance.setPaintProperty(layerId, 'circle-stroke-color', overlayPalette.isBright ? '#0b0f14' : '#f8fafc');
+      }
+    }
+  }, [effectiveAlerts, effectiveShipments, getOverlayInsertBeforeId, isLoaded, isStyleReady, overlayPalette, selectedShipment, styleVersion]);
 
   // Click interaction for overlay datapoints (deviations/breaches)
   useEffect(() => {
-    if (!map.current || !isLoaded || !isStyleReady || !map.current.isStyleLoaded()) return;
+    if (!map.current || !isLoaded || !isStyleReady) return;
     const mapInstance = map.current;
-    const interactiveLayers = ['route-deviation-points', 'geofence-breaches-circle'].filter((layerId) =>
+    const interactiveLayers = ['shipment-points-circle', 'route-deviation-points', 'geofence-breaches-circle'].filter((layerId) =>
       Boolean(mapInstance.getLayer(layerId))
     );
     if (interactiveLayers.length === 0) return;
@@ -1177,7 +1276,10 @@ export default function MapView({
         (trackingCode && item.trackingCode === trackingCode)
       );
       if (!shipment) return;
-      onShipmentSelect(shipment);
+      handleShipmentFocus(shipment);
+      if (event?.lngLat && shipment.currentLocation) {
+        showShipmentPopup(shipment, event.lngLat.lng, event.lngLat.lat);
+      }
       showToast(`Focused ${shipment.trackingCode}`);
     };
     const handleEnter = () => {
@@ -1206,16 +1308,16 @@ export default function MapView({
         mapInstance.getCanvas().style.cursor = '';
       }
     };
-  }, [effectiveShipments, isLoaded, isStyleReady, onShipmentSelect, showToast, styleVersion]);
+  }, [effectiveShipments, handleShipmentFocus, isLoaded, isStyleReady, showShipmentPopup, showToast, styleVersion]);
 
   // Click interaction for raw map canvas (select nearest asset from any point)
   useEffect(() => {
-    if (!map.current || !isLoaded || !isStyleReady || !map.current.isStyleLoaded()) return;
+    if (!map.current || !isLoaded || !isStyleReady) return;
     const mapInstance = map.current;
 
     const handleMapClick = (event: maplibregl.MapMouseEvent) => {
       const layeredFeature = mapInstance.queryRenderedFeatures(event.point, {
-        layers: ['route-deviation-points', 'geofence-breaches-circle'],
+        layers: ['shipment-points-circle', 'route-deviation-points', 'geofence-breaches-circle'],
       });
       if (layeredFeature.length > 0) return;
 
@@ -1243,6 +1345,7 @@ export default function MapView({
       if (!nearestResult.shipment) return;
 
       handleShipmentFocus(nearestResult.shipment);
+      showShipmentPopup(nearestResult.shipment, event.lngLat.lng, event.lngLat.lat);
       showToast(`Selected ${nearestResult.shipment.trackingCode} - ${nearestResult.distanceKm.toFixed(1)}km away`);
     };
 
@@ -1250,7 +1353,7 @@ export default function MapView({
     return () => {
       mapInstance.off('click', handleMapClick);
     };
-  }, [handleShipmentFocus, isLoaded, isStyleReady, shipmentsWithLocation, showToast, styleVersion]);
+  }, [handleShipmentFocus, isLoaded, isStyleReady, shipmentsWithLocation, showShipmentPopup, showToast, styleVersion]);
 
   // Fly to selected shipment
   useEffect(() => {
@@ -1325,17 +1428,6 @@ export default function MapView({
                     <div className="text-[9px] uppercase tracking-[0.35em] text-white/60">Project</div>
                     <div className="text-[12px] font-semibold text-white">Transvec Ops Grid</div>
                   </div>
-                </div>
-                <div className="hidden md:flex items-center gap-2 text-[10px] text-white/70">
-                  <a
-                    href={yieldOpsHref}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="px-2 py-1 rounded-full bg-white/10 hover:bg-white/20 transition-colors"
-                  >
-                    Open YieldOps
-                  </a>
-                  <span className="px-2 py-1 rounded-full bg-white/5">Hold for history</span>
                 </div>
               </div>
 

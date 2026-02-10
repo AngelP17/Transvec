@@ -20,7 +20,7 @@ export default function CodeWorkbook({ onClose, selectedShipment }: CodeWorkbook
   };
 
   return (
-    <div className="w-full sm:w-[600px] max-w-full border-t sm:border-t-0 sm:border-l border-border bg-void flex flex-col shadow-2xl z-20 self-stretch sm:self-end">
+    <div className="w-full sm:w-[600px] max-w-full border-t sm:border-t-0 sm:border-l border-border bg-void flex flex-col shadow-2xl z-20 self-stretch">
       {/* Notebook Header */}
       <div className="min-h-12 border-b border-border bg-void-light flex items-center justify-between px-3 sm:px-4 py-2 gap-2">
         <div className="flex items-center gap-2 sm:gap-3 min-w-0">

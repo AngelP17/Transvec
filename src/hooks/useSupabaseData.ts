@@ -35,6 +35,9 @@ import type { FabHealthSummary } from '../lib/dataAdapter';
 import { buildAutoGeofences, computeBreachPoints } from '../lib/geofences';
 import type { Shipment, Alert } from '../types';
 
+const OPS_CACHE_KEY = 'transvec:ops-cache:v1';
+const OPS_CACHE_MAX_AGE_MS = 2 * 60 * 60 * 1000; // 2 hours
+
 function normalizeGeoJson(value: unknown): GeoJSON.Geometry | null {
   if (!value) return null;
   if (typeof value === 'string') {
@@ -49,6 +52,79 @@ function normalizeGeoJson(value: unknown): GeoJSON.Geometry | null {
     return value as GeoJSON.Geometry;
   }
   return null;
+}
+
+function withTimeout<T>(promise: Promise<T>, ms: number, fallback: T): Promise<T> {
+  return new Promise((resolve) => {
+    const timer = setTimeout(() => resolve(fallback), ms);
+    promise
+      .then((result) => {
+        clearTimeout(timer);
+        resolve(result);
+      })
+      .catch(() => {
+        clearTimeout(timer);
+        resolve(fallback);
+      });
+  });
+}
+
+interface OpsCachePayload {
+  savedAt: number;
+  shipments: Shipment[];
+  alerts: Array<Omit<Alert, 'timestamp'> & { timestamp: string }>;
+  fabHealth: FabHealthSummary | null;
+}
+
+function readOpsCache(): { shipments: Shipment[]; alerts: Alert[]; fabHealth: FabHealthSummary | null } | null {
+  if (typeof window === 'undefined') return null;
+  try {
+    const raw = window.localStorage.getItem(OPS_CACHE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as OpsCachePayload;
+    if (!parsed || typeof parsed.savedAt !== 'number') return null;
+    if (Date.now() - parsed.savedAt > OPS_CACHE_MAX_AGE_MS) return null;
+
+    const shipments = Array.isArray(parsed.shipments)
+      ? parsed.shipments.map((shipment) => ({
+        ...shipment,
+        eta: shipment.eta ? new Date(shipment.eta) : undefined,
+        telemetry: {
+          ...shipment.telemetry,
+          timestamp: new Date(shipment.telemetry.timestamp),
+        },
+      }))
+      : [];
+
+    const alerts = Array.isArray(parsed.alerts)
+      ? parsed.alerts.map((alert) => ({
+        ...alert,
+        timestamp: new Date(alert.timestamp),
+      }))
+      : [];
+
+    return { shipments, alerts, fabHealth: parsed.fabHealth || null };
+  } catch {
+    return null;
+  }
+}
+
+function writeOpsCache(shipments: Shipment[], alerts: Alert[], fabHealth: FabHealthSummary | null) {
+  if (typeof window === 'undefined') return;
+  try {
+    const payload: OpsCachePayload = {
+      savedAt: Date.now(),
+      shipments,
+      alerts: alerts.map((alert) => ({
+        ...alert,
+        timestamp: alert.timestamp.toISOString(),
+      })),
+      fabHealth,
+    };
+    window.localStorage.setItem(OPS_CACHE_KEY, JSON.stringify(payload));
+  } catch {
+    // Ignore cache write failures
+  }
 }
 
 interface UseSupabaseDataReturn {
@@ -83,22 +159,39 @@ export function useSupabaseData(): UseSupabaseDataReturn {
     setError(null);
 
     try {
-      // Fetch core data + cross-system health snapshot in parallel
-      const [machines, jobs, incidents, transvecShipments, transvecAlerts, geofenceRows, healthSnapshot] = await Promise.all([
+      const [machines, jobs, incidents, transvecShipments, transvecAlerts, geofenceRows] = await Promise.all([
         fetchMachines(),
         fetchActiveJobs(),
         fetchActiveIncidents(),
         fetchTransvecShipments(),
         fetchTransvecAlerts(),
         fetchGeofences(),
-        fetchFabHealthSnapshot(),
       ]);
 
       const hasData = machines.length > 0 || jobs.length > 0 || transvecShipments.length > 0;
 
       if (hasData) {
+        const emptyHealthSnapshot: Awaited<ReturnType<typeof fetchFabHealthSnapshot>> = {
+          agents: [],
+          anomalyAlerts: [],
+          maintenanceLogs: [],
+          dispatchDecisions: [],
+          facilityStatus: [],
+          bonderStatus: [],
+          metrologyResults: [],
+          vmPredictions: [],
+          recipeAdjustments: [],
+          capacitySimulations: [],
+        };
         const machineIdsWithJobs = new Set(jobs.map(j => j.assigned_machine_id).filter(Boolean));
-        const sensorReadings = await fetchLatestSensorReadings(Array.from(machineIdsWithJobs) as string[]);
+        const [healthSnapshot, sensorReadings] = await Promise.all([
+          withTimeout(fetchFabHealthSnapshot(), 1200, emptyHealthSnapshot),
+          withTimeout(
+            fetchLatestSensorReadings(Array.from(machineIdsWithJobs) as string[]),
+            1200,
+            {} as Awaited<ReturnType<typeof fetchLatestSensorReadings>>,
+          ),
+        ]);
 
         // Transform YieldOps jobs → shipments
         let transformedShipments = jobs.map(job => {
@@ -168,10 +261,13 @@ export function useSupabaseData(): UseSupabaseDataReturn {
         }));
 
         setShipments(nextShipments);
-        setAlerts([...transformedAlerts, ...breachAlerts]);
+        const nextAlerts = [...transformedAlerts, ...breachAlerts];
+        setAlerts(nextAlerts);
 
         // Compute and expose the cross-system health summary
-        setFabHealth(computeFabHealthSummary(healthSnapshot));
+        const nextFabHealth = computeFabHealthSummary(healthSnapshot);
+        setFabHealth(nextFabHealth);
+        writeOpsCache(nextShipments, nextAlerts, nextFabHealth);
 
         if (breachAlerts.length > 0) {
           const newRows = breachAlerts
@@ -217,7 +313,20 @@ export function useSupabaseData(): UseSupabaseDataReturn {
     return success;
   }, [useMockFallback, alerts]);
 
-  useEffect(() => { loadData(); }, []);
+  useEffect(() => {
+    const cached = readOpsCache();
+    if (cached) {
+      setShipments(cached.shipments);
+      setAlerts(cached.alerts);
+      setFabHealth(cached.fabHealth);
+      setUseMockFallback(false);
+      setLoading(false);
+      isInitialLoad.current = false;
+      void loadData(true);
+      return;
+    }
+    void loadData();
+  }, [loadData]);
 
   useEffect(() => {
     const interval = setInterval(() => loadData(true), 10000);

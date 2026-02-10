@@ -12,7 +12,7 @@ export default function OntologyGraph({ onNodeSelect, shipments }: OntologyGraph
   void onNodeSelect;
 
   return (
-    <div className="w-full h-full p-4 bg-void">
+    <div className="w-full h-full p-2 sm:p-4 bg-void">
       <SystemKnowledgeGraphViz data={graph} loading={loading} onGenerate={refresh} />
     </div>
   );
