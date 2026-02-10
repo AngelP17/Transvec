@@ -46,8 +46,10 @@ export default function SettingsPanel({
   onToggleRoutes,
   onToggleBreaches,
 }: SettingsPanelProps) {
+  const panelWidthClass = 'w-[min(360px,calc(100vw-5rem))] sm:w-[min(360px,calc(100vw-6rem))]';
+
   return (
-    <div className={`absolute inset-y-0 right-0 w-[360px] border-l border-white/10 bg-black/95 backdrop-blur-xl shadow-2xl z-40 transition-transform duration-300 ${isOpen ? 'translate-x-0' : 'translate-x-full'}`}>
+    <div className={`absolute inset-y-0 right-0 ${panelWidthClass} border-l border-white/10 bg-black/95 backdrop-blur-xl shadow-2xl z-40 transition-transform duration-300 ${isOpen ? 'translate-x-0' : 'translate-x-full'}`}>
       <div className="flex items-center justify-between px-5 py-4 border-b border-border">
         <div className="flex items-center gap-2">
           <IconAdjustments className="w-5 h-5 text-white/70" />

@@ -50,8 +50,10 @@ export default function OperatorPanel({ isOpen, onClose, activeTab, isUsingLiveD
         showToast('Session log exported');
     };
 
+    const panelWidthClass = 'w-[min(360px,calc(100vw-5rem))] sm:w-[min(360px,calc(100vw-6rem))]';
+
     return (
-        <div className={`absolute inset-y-0 right-0 w-[360px] border-l border-border bg-void/95 backdrop-blur-xl shadow-2xl z-40 transition-transform duration-300 ${isOpen ? 'translate-x-0' : 'translate-x-full'}`}>
+        <div className={`absolute inset-y-0 right-0 ${panelWidthClass} border-l border-border bg-void/95 backdrop-blur-xl shadow-2xl z-40 transition-transform duration-300 ${isOpen ? 'translate-x-0' : 'translate-x-full'}`}>
             <div className="flex items-center justify-between px-5 py-4 border-b border-border">
                 <div className="flex items-center gap-3">
                     <div className="w-10 h-10 rounded-full bg-white/10 border border-white/20 flex items-center justify-center text-sm font-bold text-white">

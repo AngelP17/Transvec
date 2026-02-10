@@ -100,6 +100,7 @@ flowchart TB
 
 - **Data Fusion / Digital Thread**: YieldOps job is the seed; Transvec enriches with carrier, route, operator, and compliance records
 - **Asset Dossier**: dense identity card with chain-of-custody and compliance status
+- **Map Click-to-Dossier**: click anywhere on the map and Transvec resolves the nearest tracked shipment, then opens full object context
 - **Mission Timeline**: unified operational feed (alerts + shipment state changes)
 - **Route Deviation Heatmap**: geofence breach density overlay
 - **Predictive ETA Bands**: confidence envelope per shipment
@@ -156,6 +157,27 @@ graph TB
     OPS --> SD
     SD --> DVR
 ```
+
+#### Geospatial Selection Flow
+
+```mermaid
+sequenceDiagram
+    participant U as User
+    participant MAP as MapView (MapLibre)
+    participant INDEX as shipmentsWithLocation
+    participant APP as App State
+    participant DOS as Object Views
+
+    U->>MAP: Click any map coordinate
+    MAP->>INDEX: Find nearest shipment by haversine distance
+    INDEX-->>MAP: Nearest shipment
+    MAP->>APP: onShipmentSelect(shipment)
+    APP->>DOS: Render AssetDossierPanel + ShipmentDetail
+```
+
+#### Architecture Documentation Rule
+
+- All architecture and interaction diagrams in Transvec markdown documentation should use Mermaid JS code blocks.
 
 #### Component Inventory
 

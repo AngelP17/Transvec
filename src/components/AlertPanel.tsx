@@ -6,6 +6,7 @@ interface AlertPanelProps {
   onAlertClick: (alert: Alert) => void;
   selectedAlert: Alert | null;
   onAcknowledgeAlert?: (alertId: string) => void;
+  onViewShipment?: (alert: Alert) => boolean;
 }
 
 const severityConfig = {
@@ -77,11 +78,12 @@ function pickAssignee(seed: string) {
   return operatorPool[index];
 }
 
-export default function AlertPanel({ alerts, onAlertClick, selectedAlert, onAcknowledgeAlert }: AlertPanelProps) {
+export default function AlertPanel({ alerts, onAlertClick, selectedAlert, onAcknowledgeAlert, onViewShipment }: AlertPanelProps) {
   const [filter, setFilter] = useState<'ALL' | 'CRITICAL' | 'WARNING' | 'INFO'>('ALL');
   const [showAcknowledged, setShowAcknowledged] = useState(false);
   const [acknowledgedIds, setAcknowledgedIds] = useState<Set<string>>(new Set());
   const [triageMap, setTriageMap] = useState<Record<string, { status: TriageStatus; assignee?: string; updatedAt: number }>>({});
+  const [actionFeedback, setActionFeedback] = useState<string | null>(null);
 
   const resolveTriage = (alertId: string) =>
     triageMap[alertId] || { status: 'UNASSIGNED' as TriageStatus, assignee: '', updatedAt: 0 };
@@ -203,8 +205,12 @@ export default function AlertPanel({ alerts, onAlertClick, selectedAlert, onAckn
   };
   const selectedTriage = selectedAlert ? resolveTriage(selectedAlert.id) : null;
 
+  useEffect(() => {
+    setActionFeedback(null);
+  }, [selectedAlert?.id]);
+
   return (
-    <div className="relative w-full h-full bg-[#0b0f14] p-6 overflow-auto lg:pr-[320px]">
+    <div className="relative w-full h-full bg-[#0b0f14] p-3 sm:p-4 lg:p-6 overflow-auto">
       {/* Header */}
       <div className="mb-6">
         <div className="flex items-center gap-2 text-[10px] uppercase tracking-[0.4em] text-white/40">
@@ -216,7 +222,7 @@ export default function AlertPanel({ alerts, onAlertClick, selectedAlert, onAckn
       </div>
 
       {/* Stats Cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3 sm:gap-4 mb-6">
         <button
           onClick={() => setFilter('ALL')}
           className={`p-4 rounded-xl border transition-all text-left ${filter === 'ALL' ? 'bg-white/5 border-white/30' : 'bg-black/40 border-white/10 hover:border-white/30'}`}
@@ -268,7 +274,7 @@ export default function AlertPanel({ alerts, onAlertClick, selectedAlert, onAckn
       </div>
 
       {/* Filters */}
-      <div className="flex items-center justify-between mb-4">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
         <div className="flex items-center gap-4">
           <label className="flex items-center gap-2 text-sm text-white/60 cursor-pointer">
             <input 
@@ -280,7 +286,7 @@ export default function AlertPanel({ alerts, onAlertClick, selectedAlert, onAckn
             Show acknowledged
           </label>
         </div>
-        <div className="text-sm text-white/50">
+        <div className="text-xs sm:text-sm text-white/50">
           Showing {filteredAlerts.length} of {alerts.length} alerts
         </div>
       </div>
@@ -353,7 +359,7 @@ export default function AlertPanel({ alerts, onAlertClick, selectedAlert, onAckn
                       </div>
                     )}
                     
-                    <div className="flex items-center gap-4 text-xs text-white/40">
+                    <div className="flex flex-wrap items-center gap-2 sm:gap-4 text-xs text-white/40">
                       <span className="font-mono text-white/60">{alert.shipmentId}</span>
                       <span>•</span>
                       <span>{formatTimestamp(alert.timestamp)}</span>
@@ -403,53 +409,55 @@ export default function AlertPanel({ alerts, onAlertClick, selectedAlert, onAckn
 
       {/* Alert Detail Panel */}
       {selectedAlert && (
-        <div className="mt-6 p-4 bg-black/60 border border-white/10 rounded-xl">
+        <div className="mt-6 p-3 sm:p-4 bg-black/60 border border-white/10 rounded-xl">
           <h3 className="font-semibold text-white mb-3">Alert Details</h3>
           <div className="space-y-2 text-sm">
-            <div className="flex justify-between">
+            <div className="grid grid-cols-[auto,1fr] gap-3 items-start">
               <span className="text-white/50">Alert ID:</span>
-              <span className="font-mono text-white">{selectedAlert.id}</span>
+              <span className="font-mono text-white break-all text-right">{selectedAlert.id}</span>
             </div>
-            <div className="flex justify-between">
+            <div className="grid grid-cols-[auto,1fr] gap-3 items-start">
               <span className="text-white/50">Shipment:</span>
-              <span className="font-mono text-white">{selectedAlert.shipmentId}</span>
+              <span className="font-mono text-white break-all text-right">{selectedAlert.shipmentId}</span>
             </div>
-            <div className="flex justify-between">
+            <div className="grid grid-cols-[auto,1fr] gap-3 items-start">
               <span className="text-white/50">Type:</span>
-              <span className="text-white">{alertTypeLabels[selectedAlert.type]}</span>
+              <span className="text-white text-right">{alertTypeLabels[selectedAlert.type]}</span>
             </div>
-            <div className="flex justify-between">
+            <div className="grid grid-cols-[auto,1fr] gap-3 items-start">
               <span className="text-white/50">Severity:</span>
-              <span style={{ color: severityConfig[selectedAlert.severity].color }}>
+              <span className="text-right" style={{ color: severityConfig[selectedAlert.severity].color }}>
                 {selectedAlert.severity}
               </span>
             </div>
             {selectedTriage && (
-              <div className="flex justify-between">
+              <div className="grid grid-cols-[auto,1fr] gap-3 items-start">
                 <span className="text-white/50">Triage:</span>
-                <span className={`px-2 py-0.5 rounded-full border text-[10px] font-semibold uppercase ${triageStyles[selectedTriage.status].className}`}>
+                <span className={`ml-auto px-2 py-0.5 rounded-full border text-[10px] font-semibold uppercase ${triageStyles[selectedTriage.status].className}`}>
                   {triageStyles[selectedTriage.status].label}
                 </span>
               </div>
             )}
             {selectedTriage?.assignee && selectedTriage.status !== 'UNASSIGNED' && (
-              <div className="flex justify-between">
+              <div className="grid grid-cols-[auto,1fr] gap-3 items-start">
                 <span className="text-white/50">Assignee:</span>
-                <span className="text-white">{selectedTriage.assignee}</span>
+                <span className="text-white text-right">{selectedTriage.assignee}</span>
               </div>
             )}
-            <div className="flex justify-between">
+            <div className="grid grid-cols-[auto,1fr] gap-3 items-start">
               <span className="text-white/50">Timestamp:</span>
-              <span className="font-mono text-white">{selectedAlert.timestamp.toISOString()}</span>
+              <span className="font-mono text-white break-all text-right">{selectedAlert.timestamp.toISOString()}</span>
             </div>
           </div>
           
-          <div className="mt-4 flex gap-2">
+          <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-2">
             <button 
               onClick={() => {
-                const shipment = alerts.find(a => a.id === selectedAlert.id);
-                if (shipment) {
-                  onAlertClick(selectedAlert);
+                const resolved = onViewShipment?.(selectedAlert);
+                if (resolved === false) {
+                  setActionFeedback('No linked shipment found for this alert yet.');
+                } else {
+                  setActionFeedback(null);
                 }
               }}
               className="flex-1 px-4 py-2 bg-white text-black text-sm font-semibold rounded hover:bg-white/90 transition-colors"
@@ -463,6 +471,11 @@ export default function AlertPanel({ alerts, onAlertClick, selectedAlert, onAckn
               RUN DIAGNOSTIC
             </button>
           </div>
+          {actionFeedback && (
+            <div className="mt-2 text-xs text-warning">
+              {actionFeedback}
+            </div>
+          )}
         </div>
       )}
     </div>

@@ -24,7 +24,7 @@ export default function ShipmentDetail({ shipment, onClose, onOpenDVR }: Shipmen
   const etaBand = computeEtaBand(shipment);
 
   return (
-    <div className="absolute right-0 top-0 bottom-0 w-[400px] bg-void-lighter border-l border-border shadow-2xl z-20 overflow-auto">
+    <div className="absolute right-0 top-0 bottom-0 w-[min(400px,calc(100vw-5rem))] bg-void-lighter border-l border-border shadow-2xl z-20 overflow-auto">
       {/* Header */}
       <div className="sticky top-0 bg-void-lighter border-b border-border p-4 z-10">
         <div className="flex items-center justify-between mb-2">

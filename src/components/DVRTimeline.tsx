@@ -114,23 +114,23 @@ export default function DVRTimeline({ shipment, onClose }: DVRTimelineProps) {
   };
 
   return (
-    <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-8">
+    <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-2 sm:p-4 lg:p-8">
       <div className="w-full max-w-6xl bg-void-lighter border border-border rounded-xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
         {/* Header */}
         <div className="flex items-center justify-between p-4 border-b border-border bg-void">
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-2 sm:gap-4 min-w-0">
             <div className="w-10 h-10 bg-accent/20 rounded-lg flex items-center justify-center">
               <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-accent">
                 <polygon points="5 3 19 12 5 21 5 3"/>
               </svg>
             </div>
             <div>
-              <h2 className="text-xl font-bold text-text-bright">Environmental DVR</h2>
-              <p className="text-sm text-text-muted">{shipment.trackingCode} • Playback Mode</p>
+              <h2 className="text-base sm:text-xl font-bold text-text-bright">Environmental DVR</h2>
+              <p className="text-xs sm:text-sm text-text-muted truncate">{shipment.trackingCode} • Playback Mode</p>
             </div>
           </div>
           
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-1.5 sm:gap-4">
             {/* GPU Tier indicator */}
             <div className="flex items-center gap-2 px-2 py-1 rounded bg-code-bg text-xs text-text-muted">
               <span className={`w-2 h-2 rounded-full ${
@@ -141,7 +141,7 @@ export default function DVRTimeline({ shipment, onClose }: DVRTimelineProps) {
             </div>
 
             {/* Speed Control */}
-            <div className="flex items-center gap-2 bg-code-bg rounded-lg p-1">
+            <div className="hidden sm:flex items-center gap-2 bg-code-bg rounded-lg p-1">
               {[0.5, 1, 2, 4].map(speed => (
                 <button
                   key={speed}
@@ -183,7 +183,7 @@ export default function DVRTimeline({ shipment, onClose }: DVRTimelineProps) {
         </div>
 
         {/* Main Content */}
-        <div className="flex-1 flex overflow-hidden">
+        <div className="flex-1 flex flex-col lg:flex-row overflow-hidden">
           {/* Left: Map View (Simplified) */}
           <div className="flex-1 relative bg-black">
             <div className="absolute inset-0 grid-pattern opacity-30" />
@@ -221,7 +221,7 @@ export default function DVRTimeline({ shipment, onClose }: DVRTimelineProps) {
 
           {/* Right: Graphs */}
           {showGraphs && (
-            <div className="w-[420px] border-l border-border bg-void p-4 space-y-4 overflow-auto">
+            <div className="w-full lg:w-[420px] border-t lg:border-t-0 lg:border-l border-border bg-void p-3 sm:p-4 space-y-4 overflow-auto">
               {/* Current Values */}
               <div className="grid grid-cols-2 gap-3">
                 <div className="bg-code-bg border border-border rounded-lg p-3">

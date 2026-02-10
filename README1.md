@@ -72,6 +72,22 @@ graph TB
     DataLayer --> Components
 ```
 
+### Map Interaction Flow
+
+```mermaid
+sequenceDiagram
+    participant U as User
+    participant M as MapView
+    participant S as Shipment Store
+    participant D as Asset Dossier + Shipment Detail
+
+    U->>M: Click anywhere on map canvas
+    M->>S: Resolve nearest shipment by geo distance
+    S-->>M: Shipment object
+    M->>D: setSelectedShipment(shipment)
+    D-->>U: Full object view and telemetry context
+```
+
 ---
 
 ## Features
@@ -80,11 +96,16 @@ graph TB
 
 - Real-time geospatial tracking via MapLibre GL JS with MapTiler styles
 - Multi-modal transport markers (Air / Sea / Land) with status-based color coding
-- Click-to-select markers with live telemetry popups (shock, temp, humidity, vibration)
+- Click anywhere on the map to snap to the nearest shipment and open its full dossier/detail context
+- Marker click still supported with live telemetry popups (shock, temp, humidity, vibration)
 - **Route Deviation Heatmap** overlay (geofence breach / route deviation density)
 - **Carrier Performance Index** scorecards + trend sparklines
 - **Mission Timeline** unified ops feed (alerts + shipment state changes)
 - Live statistics overlay: total assets, in-transit count, delivered, critical alerts
+
+### Documentation Standard
+
+- Architecture and interaction diagrams in this project should be authored as Mermaid JS blocks in markdown files.
 
 ### 2. Shipment Detail Panel
 

@@ -40,6 +40,13 @@ function App() {
   const [showBreaches, setShowBreaches] = useState(true);
   const handledDeepLinkRef = useRef<string | null>(null);
 
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    if (window.innerWidth < 1024) {
+      setIsWorkbookOpen(false);
+    }
+  }, []);
+
   // Fetch data from Supabase
   const {
     shipments,
@@ -151,10 +158,57 @@ function App() {
 
   const handleAlertClick = (alert: Alert) => {
     setSelectedAlert(alert);
-    const shipment = effectiveShipments.find(s => s.id === alert.shipmentId);
+    const shipment = resolveShipmentFromAlert(alert);
     if (shipment) {
       setSelectedShipment(shipment);
     }
+  };
+
+  const resolveShipmentFromAlert = (alert: Alert): Shipment | null => {
+    const direct = effectiveShipments.find((item) => item.id === alert.shipmentId);
+    if (direct) return direct;
+
+    const byKey = effectiveShipments.find((item) => {
+      const trackingMatch = item.trackingCode.toLowerCase() === alert.shipmentId.toLowerCase();
+      const linkedJobMatch = item.dossier?.linkedJobId?.toLowerCase() === alert.shipmentId.toLowerCase();
+      return trackingMatch || linkedJobMatch;
+    });
+    if (byKey) return byKey;
+
+    // Machine-level alerts may not carry shipment ids. Try contextual matching, then fallback to active shipment.
+    const msg = (alert.message || '').toLowerCase();
+    const contextMatch = effectiveShipments.find((item) => {
+      const tags = [
+        item.trackingCode,
+        item.dossier?.linkedJobId,
+        item.clientTag,
+        item.dossier?.client,
+        item.origin.name,
+        item.destination.name,
+      ]
+        .filter(Boolean)
+        .map((value) => String(value).toLowerCase());
+
+      return tags.some((tag) => msg.includes(tag));
+    });
+    if (contextMatch) return contextMatch;
+
+    const activeStatuses = new Set(['CRITICAL', 'DELAYED', 'IN_TRANSIT', 'HELD_CUSTOMS', 'SCHEDULED']);
+    const activeCandidates = effectiveShipments.filter((item) => activeStatuses.has(item.status));
+    if (activeCandidates.length === 1) return activeCandidates[0];
+    return null;
+  };
+
+  const handleViewShipmentFromAlert = (alert: Alert): boolean => {
+    const shipment = resolveShipmentFromAlert(alert);
+    if (!shipment) return false;
+    setActiveTab('OPS');
+    setFocusMode(false);
+    setSettingsOpen(false);
+    setOperatorOpen(false);
+    setSelectedAlert(null);
+    setSelectedShipment(shipment);
+    return true;
   };
 
   const handleShipmentSelect = (shipment: Shipment) => {
@@ -176,6 +230,27 @@ function App() {
     setShowBreaches(next);
   };
 
+  const openAlertsTab = () => {
+    setActiveTab('ALERTS');
+    setFocusMode(false);
+    setOperatorOpen(false);
+    setSettingsOpen(false);
+  };
+
+  const openOperatorPanelFromOps = () => {
+    setActiveTab('OPS');
+    setFocusMode(false);
+    setSettingsOpen(false);
+    setOperatorOpen(true);
+  };
+
+  const openSettingsPanelFromOps = () => {
+    setActiveTab('OPS');
+    setFocusMode(false);
+    setOperatorOpen(false);
+    setSettingsOpen(true);
+  };
+
   const handleExport = () => {
     const payload = {
       tab: activeTab,
@@ -194,7 +269,7 @@ function App() {
   };
 
   return (
-    <div className="flex h-screen w-full bg-void text-text-bright overflow-hidden">
+    <div className="flex h-[100dvh] min-h-0 w-full bg-void text-text-bright overflow-hidden">
       {/* Sidebar Navigation */}
       <Sidebar
         activeTab={activeTab}
@@ -207,10 +282,10 @@ function App() {
       />
 
       {/* Main Content Area */}
-      <div className="flex-1 flex flex-col relative overflow-hidden" style={{ height: '100%' }}>
+      <div className="flex-1 flex flex-col relative overflow-hidden min-w-0" style={{ height: '100%' }}>
         {/* Map / Visualization Area */}
         <div
-          className={`flex-1 relative transition-all duration-300 ${isWorkbookOpen && activeTab === 'ANALYTICS' ? 'w-1/2' : 'w-full'}`}
+          className="flex-1 relative transition-all duration-300 w-full"
           style={{ minHeight: 0, height: '100%' }}
         >
 
@@ -234,7 +309,7 @@ function App() {
 
           {/* Data source indicator */}
           {!isOpsFocusMode && (
-            <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-50 bg-void-lighter/90 border border-border px-3 py-1.5 rounded-lg">
+            <div className="hidden sm:block absolute bottom-4 left-1/2 -translate-x-1/2 z-50 bg-void-lighter/90 border border-border px-3 py-1.5 rounded-lg">
               <div className="flex items-center gap-2">
                 <span className={`w-2 h-2 rounded-full ${isUsingLiveData ? 'bg-success animate-pulse' : 'bg-warning'}`} />
                 <span className="text-[10px] text-text-muted uppercase tracking-wider">
@@ -244,17 +319,19 @@ function App() {
             </div>
           )}
 
-          <SystemStatusPanel
-            activeTab={activeTab}
-            liveData={isUsingLiveData}
-            shipmentCount={effectiveShipments.length}
-            alertCount={effectiveAlerts.filter(a => !a.acknowledged).length}
-            fabHealth={fabHealth}
-            onRefresh={refreshData}
-            onToggleOverlays={handleToggleOverlays}
-            onExport={handleExport}
-            focusMode={focusMode}
-          />
+          {activeTab === 'OPS' && (
+            <SystemStatusPanel
+              activeTab={activeTab}
+              liveData={isUsingLiveData}
+              shipmentCount={effectiveShipments.length}
+              alertCount={effectiveAlerts.filter(a => !a.acknowledged).length}
+              fabHealth={fabHealth}
+              onRefresh={refreshData}
+              onToggleOverlays={handleToggleOverlays}
+              onExport={handleExport}
+              focusMode={focusMode}
+            />
+          )}
 
           {activeTab === 'OPS' && (
             <MapView
@@ -267,15 +344,18 @@ function App() {
               showBreaches={showBreaches}
               focusMode={focusMode}
               onFocusModeChange={setFocusMode}
+              onOpenAlertsTab={openAlertsTab}
+              onOpenOperatorPanel={openOperatorPanelFromOps}
+              onOpenSettingsPanel={openSettingsPanelFromOps}
             />
           )}
 
           {activeTab === 'ANALYTICS' && (
-            <div className="absolute inset-0 flex items-center justify-center bg-void-light/60">
-              <div className="w-[560px] border border-border bg-void/90 rounded-2xl p-6 shadow-2xl">
+            <div className="absolute inset-0 flex items-center justify-center bg-void-light/60 p-3 sm:p-4">
+              <div className="w-full max-w-[560px] border border-border bg-void/90 rounded-2xl p-4 sm:p-6 shadow-2xl">
                 <div className="text-xs uppercase tracking-[0.4em] text-text-muted mb-2">Analytics Workspace</div>
                 <div className="text-xl font-semibold text-text-bright mb-4">Telemetry & Forecast Console</div>
-                <div className="grid grid-cols-2 gap-4 text-sm">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4 text-sm">
                   <div className="rounded-xl border border-border bg-void-lighter/70 p-4">
                     <div className="text-[11px] uppercase tracking-[0.3em] text-text-muted">Active Streams</div>
                     <div className="text-2xl font-mono text-text-bright mt-2">{effectiveShipments.length}</div>
@@ -303,7 +383,7 @@ function App() {
                       </div>
                     </div>
                   )}
-                  <div className="col-span-2 rounded-xl border border-border bg-void-lighter/70 p-4 text-xs text-text-muted">
+                  <div className="sm:col-span-2 rounded-xl border border-border bg-void-lighter/70 p-4 text-xs text-text-muted">
                     Use the workbook drawer below to run queries, simulations, and anomaly scans in real time.
                   </div>
                 </div>
@@ -332,6 +412,7 @@ function App() {
                 onAlertClick={handleAlertClick}
                 selectedAlert={selectedAlert}
                 onAcknowledgeAlert={handleAcknowledgeAlert}
+                onViewShipment={handleViewShipmentFromAlert}
               />
             )}
           </Suspense>

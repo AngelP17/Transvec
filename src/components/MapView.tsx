@@ -3,6 +3,7 @@ import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from 're
 import maplibregl, { type StyleSpecification } from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import {
+  IconAdjustments,
   IconArrowLeft,
   IconBell,
   IconChevronDown,
@@ -37,6 +38,9 @@ interface MapViewProps {
   showBreaches?: boolean;
   focusMode: boolean;
   onFocusModeChange: (next: boolean) => void;
+  onOpenAlertsTab: () => void;
+  onOpenOperatorPanel: () => void;
+  onOpenSettingsPanel: () => void;
 }
 
 type MapStyleId = 'darkmatter' | 'satellite' | 'streets';
@@ -211,6 +215,29 @@ function normalizeSearch(value: string) {
   return value.trim().toLowerCase();
 }
 
+function toRadians(degrees: number) {
+  return (degrees * Math.PI) / 180;
+}
+
+function haversineDistanceKm(
+  a: { lat: number; lng: number },
+  b: { lat: number; lng: number }
+) {
+  const earthRadiusKm = 6371;
+  const deltaLat = toRadians(b.lat - a.lat);
+  const deltaLng = toRadians(b.lng - a.lng);
+  const lat1 = toRadians(a.lat);
+  const lat2 = toRadians(b.lat);
+
+  const sinLat = Math.sin(deltaLat / 2);
+  const sinLng = Math.sin(deltaLng / 2);
+  const haversine =
+    sinLat * sinLat +
+    Math.cos(lat1) * Math.cos(lat2) * sinLng * sinLng;
+
+  return 2 * earthRadiusKm * Math.asin(Math.min(1, Math.sqrt(haversine)));
+}
+
 const cinematicEasing = (t: number) => 1 - Math.pow(1 - t, 3);
 
 export default function MapView({
@@ -223,6 +250,9 @@ export default function MapView({
   showBreaches = true,
   focusMode,
   onFocusModeChange,
+  onOpenAlertsTab,
+  onOpenOperatorPanel,
+  onOpenSettingsPanel,
 }: MapViewProps) {
   const yieldOpsHref = `${stripTrailingSlash(import.meta.env.VITE_YIELDOPS_BASE_URL || DEFAULT_YIELDOPS_BASE_URL)}/?source=transvec`;
   const mapContainer = useRef<HTMLDivElement>(null);
@@ -240,10 +270,11 @@ export default function MapView({
   const [mapStyleId, setMapStyleId] = useState<MapStyleId>('darkmatter');
   const [searchTerm, setSearchTerm] = useState('');
   const [locationQuery, setLocationQuery] = useState('');
-  const [activeTab, setActiveTab] = useState<'results' | 'similar'>('results');
   const [isRightRailOpen, setIsRightRailOpen] = useState(true);
   const [toastMsg, setToastMsg] = useState<string | null>(null);
   const [liveCaptureImage, setLiveCaptureImage] = useState<string | null>(null);
+  const [isOperatorMenuOpen, setIsOperatorMenuOpen] = useState(false);
+  const operatorMenuRef = useRef<HTMLDivElement>(null);
 
   const showToast = useCallback((msg: string) => {
     setToastMsg(msg);
@@ -440,21 +471,6 @@ export default function MapView({
     if (!focusShipment) return null;
     return buildRoutePreviewImage(focusShipment, { width: 720, height: 360, bright: isBrightPreview });
   }, [focusShipment, isBrightPreview, styleVersion]);
-  const similarShipments = useMemo(() => {
-    if (!focusShipment) return shipmentsWithLocation.slice(0, 3);
-    const pool = shipmentsWithLocation.filter((shipment) => shipment.id !== focusShipment.id);
-    const byCarrier = pool.filter((shipment) => shipment.carrierId === focusShipment.carrierId);
-    const byStatus = pool.filter((shipment) => shipment.status === focusShipment.status && shipment.carrierId !== focusShipment.carrierId);
-    const remainder = pool.filter((shipment) => shipment.carrierId !== focusShipment.carrierId && shipment.status !== focusShipment.status);
-    return [...byCarrier, ...byStatus, ...remainder].slice(0, 3);
-  }, [focusShipment, shipmentsWithLocation]);
-  const similarPreviewImages = useMemo(() => {
-    const entries = similarShipments.map((shipment) => [
-      shipment.id,
-      buildRoutePreviewImage(shipment, { width: 560, height: 180, bright: isBrightPreview }),
-    ] as const);
-    return Object.fromEntries(entries);
-  }, [similarShipments, isBrightPreview, styleVersion]);
 
   const overlayPalette = useMemo(() => {
     const isSatellite = mapStyleId === 'satellite';
@@ -512,6 +528,18 @@ export default function MapView({
       setIsRightRailOpen(true);
     }
   }, [focusMode]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const handleWindowClick = (event: MouseEvent) => {
+      if (!operatorMenuRef.current) return;
+      if (!operatorMenuRef.current.contains(event.target as Node)) {
+        setIsOperatorMenuOpen(false);
+      }
+    };
+    window.addEventListener('click', handleWindowClick);
+    return () => window.removeEventListener('click', handleWindowClick);
+  }, []);
 
   useEffect(() => {
     const captureFromMap = () => {
@@ -1180,6 +1208,50 @@ export default function MapView({
     };
   }, [effectiveShipments, isLoaded, isStyleReady, onShipmentSelect, showToast, styleVersion]);
 
+  // Click interaction for raw map canvas (select nearest asset from any point)
+  useEffect(() => {
+    if (!map.current || !isLoaded || !isStyleReady || !map.current.isStyleLoaded()) return;
+    const mapInstance = map.current;
+
+    const handleMapClick = (event: maplibregl.MapMouseEvent) => {
+      const layeredFeature = mapInstance.queryRenderedFeatures(event.point, {
+        layers: ['route-deviation-points', 'geofence-breaches-circle'],
+      });
+      if (layeredFeature.length > 0) return;
+
+      if (!shipmentsWithLocation.length) {
+        showToast('No trackable assets available');
+        return;
+      }
+
+      const clickedPoint = { lat: event.lngLat.lat, lng: event.lngLat.lng };
+      const nearestResult = shipmentsWithLocation.reduce<{
+        shipment: Shipment | null;
+        distanceKm: number;
+      }>(
+        (best, shipment) => {
+          if (!shipment.currentLocation) return best;
+          const distanceKm = haversineDistanceKm(clickedPoint, shipment.currentLocation);
+          if (distanceKm < best.distanceKm) {
+            return { shipment, distanceKm };
+          }
+          return best;
+        },
+        { shipment: null, distanceKm: Number.POSITIVE_INFINITY }
+      );
+
+      if (!nearestResult.shipment) return;
+
+      handleShipmentFocus(nearestResult.shipment);
+      showToast(`Selected ${nearestResult.shipment.trackingCode} - ${nearestResult.distanceKm.toFixed(1)}km away`);
+    };
+
+    mapInstance.on('click', handleMapClick);
+    return () => {
+      mapInstance.off('click', handleMapClick);
+    };
+  }, [handleShipmentFocus, isLoaded, isStyleReady, shipmentsWithLocation, showToast, styleVersion]);
+
   // Fly to selected shipment
   useEffect(() => {
     if (map.current && selectedShipment?.currentLocation) {
@@ -1236,7 +1308,7 @@ export default function MapView({
       {isLoaded && (
         <>
           {showUiOverlays && (
-            <div className="absolute left-4 right-4 top-4 z-20 flex items-center justify-between gap-3 pointer-events-none">
+            <div className="absolute left-4 right-4 top-4 z-20 flex flex-wrap items-start justify-between gap-3 pointer-events-none">
               <div className="flex items-center gap-3 pointer-events-auto">
                 <div className="flex items-center gap-2 bg-black/80 border border-white/10 px-3 py-2 rounded-full shadow-xl">
                   <a
@@ -1253,29 +1325,6 @@ export default function MapView({
                     <div className="text-[9px] uppercase tracking-[0.35em] text-white/60">Project</div>
                     <div className="text-[12px] font-semibold text-white">Transvec Ops Grid</div>
                   </div>
-                  <form
-                    onSubmit={(event) => event.preventDefault()}
-                    className="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-full bg-white/10 text-[11px] text-white/80"
-                  >
-                    <IconSearch className="w-3.5 h-3.5" />
-                    <input
-                      value={searchTerm}
-                      onChange={(event) => setSearchTerm(event.target.value)}
-                      placeholder="Quick Search"
-                      className="bg-transparent outline-none placeholder:text-white/50 w-36"
-                      aria-label="Quick search shipments"
-                    />
-                    {searchTerm && (
-                      <button
-                        type="button"
-                        onClick={() => setSearchTerm('')}
-                        className="p-1 rounded-full hover:bg-white/20 transition"
-                        aria-label="Clear search"
-                      >
-                        <IconX className="w-3.5 h-3.5" />
-                      </button>
-                    )}
-                  </form>
                 </div>
                 <div className="hidden md:flex items-center gap-2 text-[10px] text-white/70">
                   <a
@@ -1290,45 +1339,56 @@ export default function MapView({
                 </div>
               </div>
 
-              <div className="flex items-center gap-2 pointer-events-auto">
-                <form
-                  onSubmit={handleLocationSubmit}
-                  className="hidden lg:flex items-center gap-2 bg-black/85 border border-white/10 px-4 py-2 rounded-full text-[11px] text-white/80 shadow-xl"
-                >
-                  <IconSearch className="w-4 h-4" />
-                  <input
-                    value={locationQuery}
-                    onChange={(event) => setLocationQuery(event.target.value)}
-                    placeholder="Search location or lat,lng"
-                    className="bg-transparent outline-none placeholder:text-white/40 w-44"
-                    aria-label="Search location"
-                  />
-                  {locationQuery && (
-                    <button
-                      type="button"
-                      onClick={() => setLocationQuery('')}
-                      className="p-1 rounded-full hover:bg-white/10 transition"
-                      aria-label="Clear location search"
-                    >
-                      <IconX className="w-3.5 h-3.5" />
-                    </button>
-                  )}
-                </form>
+              <div className="flex items-center gap-2 pointer-events-auto ml-auto">
                 <button
-                  onClick={() => showToast('Alerts panel available in sidebar → ALERTS tab')}
+                  onClick={onOpenAlertsTab}
                   className="h-9 px-3 rounded-full bg-white/10 text-[11px] text-white/80 border border-white/10 hover:bg-white/20 transition hidden sm:inline-flex items-center gap-2"
                 >
                   <IconBell className="w-4 h-4" />
                   Alerts
                 </button>
-                <button
-                  onClick={() => showToast('Operator profile available in sidebar')}
-                  className="flex items-center gap-2 bg-black/85 border border-white/10 px-3 py-1.5 rounded-full shadow-xl hover:bg-white/5 transition"
-                >
-                  <IconUserCircle className="w-6 h-6 text-white/80" />
-                  <span className="text-[11px] text-white/80 hidden sm:inline">Ops Analyst</span>
-                  <IconChevronDown className="w-4 h-4 text-white/60" />
-                </button>
+                <div ref={operatorMenuRef} className="relative">
+                  <button
+                    onClick={() => setIsOperatorMenuOpen((open) => !open)}
+                    className="flex items-center gap-2 bg-black/85 border border-white/10 px-3 py-1.5 rounded-full shadow-xl hover:bg-white/5 transition"
+                  >
+                    <IconUserCircle className="w-6 h-6 text-white/80" />
+                    <span className="text-[11px] text-white/80 hidden sm:inline">Ops Analyst</span>
+                    <IconChevronDown className="w-4 h-4 text-white/60" />
+                  </button>
+                  {isOperatorMenuOpen && (
+                    <div className="absolute right-0 mt-2 w-52 rounded-xl border border-white/10 bg-black/95 shadow-2xl overflow-hidden">
+                      <button
+                        onClick={() => {
+                          onOpenOperatorPanel();
+                          setIsOperatorMenuOpen(false);
+                        }}
+                        className="w-full px-3 py-2.5 text-left text-[11px] text-white/85 hover:bg-white/10 transition"
+                      >
+                        Open Operator Panel
+                      </button>
+                      <button
+                        onClick={() => {
+                          onOpenAlertsTab();
+                          setIsOperatorMenuOpen(false);
+                        }}
+                        className="w-full px-3 py-2.5 text-left text-[11px] text-white/85 hover:bg-white/10 transition border-t border-white/10"
+                      >
+                        Go to Alerts Tab
+                      </button>
+                      <button
+                        onClick={() => {
+                          onOpenSettingsPanel();
+                          setIsOperatorMenuOpen(false);
+                        }}
+                        className="w-full px-3 py-2.5 text-left text-[11px] text-white/85 hover:bg-white/10 transition border-t border-white/10 flex items-center gap-2"
+                      >
+                        <IconAdjustments className="w-3.5 h-3.5" />
+                        Open Settings
+                      </button>
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
           )}
@@ -1366,32 +1426,12 @@ export default function MapView({
           )}
 
           <div
-            className={`absolute top-20 right-4 z-10 w-[min(92vw,22rem)] sm:w-80 bg-black/85 border border-white/10 rounded-2xl shadow-2xl transition-all duration-300 max-h-[calc(100vh-6rem)] overflow-y-auto ${isRightRailOpen
+            className={`absolute top-20 right-4 z-10 w-[calc(100%-2rem)] max-w-[22rem] sm:w-80 bg-black/85 border border-white/10 rounded-2xl shadow-2xl transition-all duration-300 max-h-[calc(100vh-6rem)] overflow-y-auto ${isRightRailOpen
               ? 'translate-x-0 opacity-100 pointer-events-auto'
               : 'translate-x-[120%] opacity-0 pointer-events-none'
               } lg:translate-x-0 lg:opacity-100 lg:pointer-events-auto`}
           >
             <div className="flex items-center justify-between px-4 pt-4">
-              <div className="flex gap-2">
-                <button
-                  onClick={() => setActiveTab('results')}
-                  className={`px-3 py-1.5 rounded-full text-[11px] font-semibold transition ${activeTab === 'results'
-                    ? 'bg-white text-black'
-                    : 'bg-white/10 text-white/80 hover:bg-white/20'
-                    }`}
-                >
-                  Results
-                </button>
-                <button
-                  onClick={() => setActiveTab('similar')}
-                  className={`px-3 py-1.5 rounded-full text-[11px] font-semibold transition ${activeTab === 'similar'
-                    ? 'bg-white text-black'
-                    : 'bg-white/10 text-white/80 hover:bg-white/20'
-                    }`}
-                >
-                  Similar Images
-                </button>
-              </div>
               <div className="flex items-center gap-2">
                 {normalizedSearchTerm && (
                   <span className="text-[10px] uppercase tracking-[0.2em] text-white/60">
@@ -1405,9 +1445,6 @@ export default function MapView({
                 >
                   {focusMode ? <IconEyeOff className="w-3 h-3" /> : <IconEye className="w-3 h-3" />}
                   Focus
-                </button>
-                <button className="text-[10px] uppercase tracking-[0.2em] text-white/60 hidden sm:inline">
-                  Beta
                 </button>
                 <button
                   onClick={() => setIsRightRailOpen(false)}
@@ -1542,126 +1579,84 @@ export default function MapView({
                   </div>
                 </div>
               </div>
-              {activeTab === 'results' ? (
-                <div className="mt-4">
-                  <div className="flex items-center justify-between text-[10px] text-white/60 uppercase tracking-[0.2em]">
-                    <span>Results</span>
-                    {normalizedSearchTerm && (
-                      <button
-                        onClick={() => setSearchTerm('')}
-                        className="text-[10px] text-white/60 hover:text-white/80"
-                      >
-                        Clear
-                      </button>
-                    )}
-                  </div>
-                  <div className="mt-2 space-y-2">
-                    {displayedResults.map((shipment) => (
-                      <button
-                        key={shipment.id}
-                        onClick={() => handleShipmentFocus(shipment)}
-                        className={`w-full text-left px-3 py-2 rounded-lg border transition ${selectedShipment?.id === shipment.id
-                          ? 'border-white/40 bg-white/10'
-                          : 'border-white/10 bg-white/5 hover:bg-white/10'
-                          }`}
-                      >
-                        {(() => {
-                          const risk = computeGeoRiskScore(shipment.currentLocation);
-                          return (
-                            <div className="flex items-center justify-between">
-                              <div className="flex items-center gap-2 text-[11px] text-white font-semibold">
-                                <span
-                                  className="w-2 h-2 rounded-full"
-                                  style={{ backgroundColor: statusColors[shipment.status] || '#8a9ba8' }}
-                                />
-                                {shipment.trackingCode}
-                              </div>
-                              <div className="flex items-center gap-2 text-[9px] text-white/60">
-                                <span>{shipment.statusLabel || shipment.status}</span>
-                                <span className={`px-1.5 py-0.5 rounded-full border ${risk.level === 'HIGH'
-                                  ? 'border-critical/60 text-critical'
-                                  : risk.level === 'MED'
-                                    ? 'border-warning/60 text-warning'
-                                    : 'border-white/20 text-white/50'
-                                  }`}>
-                                  {risk.level}
-                                </span>
-                              </div>
-                            </div>
-                          );
-                        })()}
-                        <div className="text-[9px] text-white/50">
-                          {shipment.origin.name} → {shipment.destination.name}
-                        </div>
-                      </button>
-                    ))}
-                    {displayedResults.length === 0 && (
-                      <div className="px-3 py-2 rounded-lg border border-white/10 bg-white/5 text-[10px] text-white/50">
-                        No matching shipments found.
-                      </div>
-                    )}
-                  </div>
-                  {locationQuery && locationMatches.length > 0 && (
-                    <div className="mt-3">
-                      <div className="text-[10px] text-white/60 uppercase tracking-[0.2em]">Location Matches</div>
-                      <div className="mt-2 space-y-2">
-                        {locationMatches.slice(0, 3).map((shipment) => (
-                          <button
-                            key={`loc-${shipment.id}`}
-                            onClick={() => handleShipmentFocus(shipment)}
-                            className="w-full text-left px-3 py-2 rounded-lg border border-white/10 bg-white/5 hover:bg-white/10 transition"
-                          >
-                            <div className="text-[10px] text-white">
-                              {shipment.origin.name} → {shipment.destination.name}
-                            </div>
-                            <div className="text-[9px] text-white/50">{shipment.trackingCode}</div>
-                          </button>
-                        ))}
-                      </div>
-                    </div>
+              <div className="mt-4">
+                <div className="flex items-center justify-between text-[10px] text-white/60 uppercase tracking-[0.2em]">
+                  <span>Results</span>
+                  {normalizedSearchTerm && (
+                    <button
+                      onClick={() => setSearchTerm('')}
+                      className="text-[10px] text-white/60 hover:text-white/80"
+                    >
+                      Clear
+                    </button>
                   )}
                 </div>
-              ) : (
-                <div className="mt-4 space-y-3">
-                  <div className="text-[10px] text-white/60 uppercase tracking-[0.2em]">Similar routes</div>
-                  {similarShipments.map((shipment) => {
-                    const preview = similarPreviewImages[shipment.id] || null;
-                    return (
-                      <button
-                        key={`similar-${shipment.id}`}
-                        onClick={() => handleShipmentFocus(shipment)}
-                        className="w-full rounded-lg border border-white/10 bg-white/5 overflow-hidden text-left hover:bg-white/10 transition"
-                      >
-                        <div className="relative h-20 bg-black/70">
-                          {preview && (
-                            <img
-                              src={preview}
-                              alt={`${shipment.trackingCode} route preview`}
-                              className="absolute inset-0 h-full w-full object-cover"
-                              width={560}
-                              height={180}
-                              loading="lazy"
-                            />
-                          )}
-                          <div className="absolute inset-0 bg-[linear-gradient(to_top,rgba(0,0,0,0.82),transparent_70%)]" />
-                          <div className="absolute bottom-2 left-2 text-[10px] font-semibold text-white">
-                            {shipment.trackingCode}
+                <div className="mt-2 space-y-2">
+                  {displayedResults.map((shipment) => (
+                    <button
+                      key={shipment.id}
+                      onClick={() => handleShipmentFocus(shipment)}
+                      className={`w-full text-left px-3 py-2 rounded-lg border transition ${selectedShipment?.id === shipment.id
+                        ? 'border-white/40 bg-white/10'
+                        : 'border-white/10 bg-white/5 hover:bg-white/10'
+                        }`}
+                    >
+                      {(() => {
+                        const risk = computeGeoRiskScore(shipment.currentLocation);
+                        return (
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-2 text-[11px] text-white font-semibold">
+                              <span
+                                className="w-2 h-2 rounded-full"
+                                style={{ backgroundColor: statusColors[shipment.status] || '#8a9ba8' }}
+                              />
+                              {shipment.trackingCode}
+                            </div>
+                            <div className="flex items-center gap-2 text-[9px] text-white/60">
+                              <span>{shipment.statusLabel || shipment.status}</span>
+                              <span className={`px-1.5 py-0.5 rounded-full border ${risk.level === 'HIGH'
+                                ? 'border-critical/60 text-critical'
+                                : risk.level === 'MED'
+                                  ? 'border-warning/60 text-warning'
+                                  : 'border-white/20 text-white/50'
+                                }`}>
+                                {risk.level}
+                              </span>
+                            </div>
                           </div>
-                        </div>
-                        <div className="px-3 py-2 text-[10px] text-white/75">
-                          <div>{shipment.origin.name} → {shipment.destination.name}</div>
-                          <div className="text-white/50">{shipment.statusLabel || shipment.status}</div>
-                        </div>
-                      </button>
-                    );
-                  })}
-                  {similarShipments.length === 0 && (
-                    <div className="rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-[10px] text-white/50">
-                      No similar routes found.
+                        );
+                      })()}
+                      <div className="text-[9px] text-white/50">
+                        {shipment.origin.name} → {shipment.destination.name}
+                      </div>
+                    </button>
+                  ))}
+                  {displayedResults.length === 0 && (
+                    <div className="px-3 py-2 rounded-lg border border-white/10 bg-white/5 text-[10px] text-white/50">
+                      No matching shipments found.
                     </div>
                   )}
                 </div>
-              )}
+                {locationQuery && locationMatches.length > 0 && (
+                  <div className="mt-3">
+                    <div className="text-[10px] text-white/60 uppercase tracking-[0.2em]">Location Matches</div>
+                    <div className="mt-2 space-y-2">
+                      {locationMatches.slice(0, 3).map((shipment) => (
+                        <button
+                          key={`loc-${shipment.id}`}
+                          onClick={() => handleShipmentFocus(shipment)}
+                          className="w-full text-left px-3 py-2 rounded-lg border border-white/10 bg-white/5 hover:bg-white/10 transition"
+                        >
+                          <div className="text-[10px] text-white">
+                            {shipment.origin.name} → {shipment.destination.name}
+                          </div>
+                          <div className="text-[9px] text-white/50">{shipment.trackingCode}</div>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
               <div className="mt-4 grid grid-cols-2 gap-2">
                 <button
                   onClick={() => { window.print(); showToast('Print dialog opened'); }}
@@ -1675,14 +1670,6 @@ export default function MapView({
                 >
                   Share Ops
                 </button>
-              </div>
-              <div className="mt-3 flex items-center justify-between text-[10px] text-white/50">
-                <span>How did we do?</span>
-                <div className="flex gap-2">
-                  <button className="w-7 h-7 rounded-full bg-white/10">🙂</button>
-                  <button className="w-7 h-7 rounded-full bg-white/10">😐</button>
-                  <button className="w-7 h-7 rounded-full bg-white/10">😕</button>
-                </div>
               </div>
             </div>
           </div>
