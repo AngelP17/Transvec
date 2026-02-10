@@ -92,25 +92,91 @@ const FALLBACK_STYLE_DEFINITIONS: Record<MapStyleId, StyleSpecification> = {
   },
 };
 
-function buildPreviewUrl(
-  mapStyleId: MapStyleId,
-  location: { lat: number; lng: number },
-  mapTilerKey?: string,
-  options?: { width?: number; height?: number; zoom?: number; marker?: boolean }
+function projectPoint(
+  point: { lat: number; lng: number },
+  width: number,
+  height: number
 ) {
-  const width = Math.max(240, Math.round(options?.width ?? 640));
-  const height = Math.max(120, Math.round(options?.height ?? 320));
-  const zoom = options?.zoom ?? 4;
-  const marker = options?.marker ?? true;
-  const hidpiWidth = Math.min(width * 2, 1280);
-  const hidpiHeight = Math.min(height * 2, 1280);
-  if (mapTilerKey) {
-    const styleId = MAPTILER_STYLE_IDS[mapStyleId];
-    const markerPath = marker ? `/${location.lng},${location.lat},red` : '';
-    return `https://api.maptiler.com/maps/${styleId}/static/${location.lng},${location.lat},${zoom}${markerPath}/${width}x${height}@2x.png?key=${mapTilerKey}`;
+  const x = ((point.lng + 180) / 360) * width;
+  const y = ((90 - point.lat) / 180) * height;
+  return { x, y };
+}
+
+function buildRoutePreviewImage(
+  shipment: Shipment,
+  options?: { width?: number; height?: number; bright?: boolean }
+) {
+  const width = Math.max(180, Math.round(options?.width ?? 560));
+  const height = Math.max(90, Math.round(options?.height ?? 180));
+  const bright = options?.bright ?? false;
+
+  const canvas = document.createElement('canvas');
+  canvas.width = width;
+  canvas.height = height;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return null;
+
+  const bg = ctx.createLinearGradient(0, 0, width, height);
+  if (bright) {
+    bg.addColorStop(0, '#dbe7f3');
+    bg.addColorStop(1, '#8ea2b5');
+  } else {
+    bg.addColorStop(0, '#0d1119');
+    bg.addColorStop(1, '#04070b');
   }
-  const markerQuery = marker ? `&markers=${location.lat},${location.lng},red-pushpin` : '';
-  return `https://staticmap.openstreetmap.de/staticmap.php?center=${location.lat},${location.lng}&zoom=${zoom}&size=${hidpiWidth}x${hidpiHeight}${markerQuery}`;
+  ctx.fillStyle = bg;
+  ctx.fillRect(0, 0, width, height);
+
+  ctx.strokeStyle = bright ? 'rgba(0,0,0,0.1)' : 'rgba(255,255,255,0.08)';
+  ctx.lineWidth = 1;
+  for (let x = 0; x < width; x += Math.round(width / 8)) {
+    ctx.beginPath();
+    ctx.moveTo(x, 0);
+    ctx.lineTo(x, height);
+    ctx.stroke();
+  }
+  for (let y = 0; y < height; y += Math.round(height / 4)) {
+    ctx.beginPath();
+    ctx.moveTo(0, y);
+    ctx.lineTo(width, y);
+    ctx.stroke();
+  }
+
+  const start = projectPoint(shipment.origin.location, width, height);
+  const end = projectPoint(shipment.destination.location, width, height);
+  const current = projectPoint(shipment.currentLocation || shipment.origin.location, width, height);
+
+  ctx.strokeStyle = bright ? 'rgba(0,0,0,0.65)' : 'rgba(255,255,255,0.75)';
+  ctx.lineWidth = 2;
+  ctx.setLineDash([5, 4]);
+  ctx.beginPath();
+  ctx.moveTo(start.x, start.y);
+  ctx.lineTo(end.x, end.y);
+  ctx.stroke();
+  ctx.setLineDash([]);
+
+  ctx.fillStyle = bright ? '#111827' : '#d1d5db';
+  ctx.beginPath();
+  ctx.arc(start.x, start.y, 3, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.beginPath();
+  ctx.arc(end.x, end.y, 3, 0, Math.PI * 2);
+  ctx.fill();
+
+  const markerColor = statusColors[shipment.status] || '#e5e7eb';
+  ctx.fillStyle = markerColor;
+  ctx.beginPath();
+  ctx.arc(current.x, current.y, 5, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.strokeStyle = bright ? '#ffffff' : '#111827';
+  ctx.lineWidth = 1.5;
+  ctx.beginPath();
+  ctx.arc(current.x, current.y, 7, 0, Math.PI * 2);
+  ctx.stroke();
+
+  return canvas.toDataURL('image/jpeg', 0.85);
 }
 
 // Status colors
@@ -156,6 +222,8 @@ export default function MapView({
   const map = useRef<maplibregl.Map | null>(null);
   const markers = useRef<maplibregl.Marker[]>([]);
   const driftFrame = useRef<number | null>(null);
+  const styleReadyFrame = useRef<number | null>(null);
+  const liveCaptureInterval = useRef<number | null>(null);
   const [isLoaded, setIsLoaded] = useState(false);
   const [isStyleReady, setIsStyleReady] = useState(false);
   const [styleVersion, setStyleVersion] = useState(0);
@@ -166,6 +234,7 @@ export default function MapView({
   const [activeTab, setActiveTab] = useState<'results' | 'similar'>('results');
   const [isRightRailOpen, setIsRightRailOpen] = useState(true);
   const [toastMsg, setToastMsg] = useState<string | null>(null);
+  const [liveCaptureImage, setLiveCaptureImage] = useState<string | null>(null);
 
   const showToast = useCallback((msg: string) => {
     setToastMsg(msg);
@@ -343,10 +412,11 @@ export default function MapView({
     [normalizedSearchTerm, filteredShipments, shipmentsWithLocation]
   );
   const displayedResults = useMemo(() => resultShipments.slice(0, 6), [resultShipments]);
-  const liveCaptureImage = useMemo(() => {
-    if (!focusShipment?.currentLocation) return null;
-    return buildPreviewUrl(mapStyleId, focusShipment.currentLocation, mapTilerKey, { width: 720, height: 360, zoom: 5 });
-  }, [focusShipment, mapStyleId, mapTilerKey]);
+  const isBrightPreview = mapStyleId !== 'darkmatter';
+  const liveCaptureFallback = useMemo(() => {
+    if (!focusShipment) return null;
+    return buildRoutePreviewImage(focusShipment, { width: 720, height: 360, bright: isBrightPreview });
+  }, [focusShipment, isBrightPreview, styleVersion]);
   const similarShipments = useMemo(() => {
     if (!focusShipment) return shipmentsWithLocation.slice(0, 3);
     const pool = shipmentsWithLocation.filter((shipment) => shipment.id !== focusShipment.id);
@@ -355,6 +425,13 @@ export default function MapView({
     const remainder = pool.filter((shipment) => shipment.carrierId !== focusShipment.carrierId && shipment.status !== focusShipment.status);
     return [...byCarrier, ...byStatus, ...remainder].slice(0, 3);
   }, [focusShipment, shipmentsWithLocation]);
+  const similarPreviewImages = useMemo(() => {
+    const entries = similarShipments.map((shipment) => [
+      shipment.id,
+      buildRoutePreviewImage(shipment, { width: 560, height: 180, bright: isBrightPreview }),
+    ] as const);
+    return Object.fromEntries(entries);
+  }, [similarShipments, isBrightPreview, styleVersion]);
 
   const overlayPalette = useMemo(() => {
     const isSatellite = mapStyleId === 'satellite';
@@ -444,6 +521,39 @@ export default function MapView({
     };
   }, [isLoaded]);
 
+  useEffect(() => {
+    const captureFromMap = () => {
+      if (!map.current || !isLoaded || !isStyleReady) return;
+      try {
+        const canvas = map.current.getCanvas();
+        const src = canvas.toDataURL('image/jpeg', 0.82);
+        if (src && src.length > 64) {
+          setLiveCaptureImage(src);
+        }
+      } catch {
+        // Ignore canvas capture failures and keep fallback preview.
+      }
+    };
+
+    captureFromMap();
+
+    if (liveCaptureInterval.current) {
+      window.clearInterval(liveCaptureInterval.current);
+      liveCaptureInterval.current = null;
+    }
+
+    if (isLoaded && isStyleReady) {
+      liveCaptureInterval.current = window.setInterval(captureFromMap, 1800);
+    }
+
+    return () => {
+      if (liveCaptureInterval.current) {
+        window.clearInterval(liveCaptureInterval.current);
+        liveCaptureInterval.current = null;
+      }
+    };
+  }, [isLoaded, isStyleReady, mapStyleId, focusShipment?.id, styleVersion]);
+
   // Initialize map
   useEffect(() => {
     if (!mapContainer.current) {
@@ -465,6 +575,7 @@ export default function MapView({
     let handleLoad: (() => void) | null = null;
     let handleStyleLoading: (() => void) | null = null;
     let handleStyleLoad: (() => void) | null = null;
+    let handleStyleData: (() => void) | null = null;
     let handleError: ((e: ErrorEvent) => void) | null = null;
 
     try {
@@ -515,6 +626,12 @@ export default function MapView({
           setStyleVersion((current) => current + 1);
         }
       };
+      handleStyleData = () => {
+        if (mapInstance?.isStyleLoaded()) {
+          setIsStyleReady(true);
+          setStyleVersion((current) => current + 1);
+        }
+      };
 
       handleError = (e: ErrorEvent) => {
         console.error('Map error:', e);
@@ -524,6 +641,7 @@ export default function MapView({
       mapInstance.on('load', handleLoad);
       mapInstance.on('styleloading', handleStyleLoading);
       mapInstance.on('style.load', handleStyleLoad);
+      mapInstance.on('styledata', handleStyleData);
       mapInstance.on('error', handleError);
 
     } catch (err: any) {
@@ -536,6 +654,7 @@ export default function MapView({
         if (handleLoad) mapInstance.off('load', handleLoad);
         if (handleStyleLoading) mapInstance.off('styleloading', handleStyleLoading);
         if (handleStyleLoad) mapInstance.off('style.load', handleStyleLoad);
+        if (handleStyleData) mapInstance.off('styledata', handleStyleData);
         if (handleError) mapInstance.off('error', handleError);
         mapInstance.remove();
       }
@@ -830,11 +949,9 @@ export default function MapView({
     const mapInstance = map.current;
     const sourceId = 'geofence-breaches';
     const circleLayerId = 'geofence-breaches-circle';
-    const labelLayerId = 'geofence-breaches-label';
 
     if (!breachesEnabled) {
       if (mapInstance.getLayer(circleLayerId)) mapInstance.removeLayer(circleLayerId);
-      if (mapInstance.getLayer(labelLayerId)) mapInstance.removeLayer(labelLayerId);
       if (mapInstance.getSource(sourceId)) mapInstance.removeSource(sourceId);
       return;
     }
@@ -868,21 +985,6 @@ export default function MapView({
           'circle-opacity': 0.9,
           'circle-stroke-color': overlayPalette.isBright ? '#0b0f14' : '#0b0f14',
           'circle-stroke-width': 2,
-        },
-      });
-
-      addLayer({
-        id: labelLayerId,
-        type: 'symbol',
-        source: sourceId,
-        layout: {
-          'text-field': 'X',
-          'text-size': 10,
-          'text-allow-overlap': true,
-          'text-ignore-placement': true,
-        },
-        paint: {
-          'text-color': '#0b0f14',
         },
       });
     } else {
@@ -961,6 +1063,30 @@ export default function MapView({
     setIsStyleReady(false);
     setLoadError(null);
     map.current.setStyle(styleDefinition, { diff: false });
+
+    const startedAt = Date.now();
+    const waitForStyleReady = () => {
+      if (!map.current) return;
+      if (map.current.isStyleLoaded()) {
+        setIsStyleReady(true);
+        setStyleVersion((current) => current + 1);
+        styleReadyFrame.current = null;
+        return;
+      }
+      if (Date.now() - startedAt > 7000) {
+        styleReadyFrame.current = null;
+        return;
+      }
+      styleReadyFrame.current = requestAnimationFrame(waitForStyleReady);
+    };
+    styleReadyFrame.current = requestAnimationFrame(waitForStyleReady);
+
+    return () => {
+      if (styleReadyFrame.current) {
+        cancelAnimationFrame(styleReadyFrame.current);
+        styleReadyFrame.current = null;
+      }
+    };
   }, [styleDefinition]);
 
   // Add/update markers
@@ -1278,9 +1404,9 @@ export default function MapView({
                 </form>
               </div>
               <div className="mt-4 h-40 rounded-xl border border-white/10 bg-black/60 relative overflow-hidden">
-                {liveCaptureImage && (
+                {(liveCaptureImage || liveCaptureFallback) && (
                   <img
-                    src={liveCaptureImage}
+                    src={liveCaptureImage || liveCaptureFallback || ''}
                     alt="Live location preview"
                     className="absolute inset-0 h-full w-full object-cover"
                     width={720}
@@ -1438,9 +1564,7 @@ export default function MapView({
                 <div className="mt-4 space-y-3">
                   <div className="text-[10px] text-white/60 uppercase tracking-[0.2em]">Similar routes</div>
                   {similarShipments.map((shipment) => {
-                    const preview = shipment.currentLocation
-                      ? buildPreviewUrl(mapStyleId, shipment.currentLocation, mapTilerKey, { width: 560, height: 180, zoom: 4, marker: false })
-                      : null;
+                    const preview = similarPreviewImages[shipment.id] || null;
                     return (
                       <button
                         key={`similar-${shipment.id}`}

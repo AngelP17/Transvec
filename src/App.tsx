@@ -1,4 +1,4 @@
-import { useState, lazy, Suspense, useEffect, useMemo } from 'react';
+import { useState, lazy, Suspense, useEffect, useMemo, useRef } from 'react';
 import Sidebar from './components/Sidebar';
 import MapView from './components/MapView';
 import SettingsPanel from './components/SettingsPanel';
@@ -38,6 +38,7 @@ function App() {
   const [showGeofences, setShowGeofences] = useState(true);
   const [showRoutes, setShowRoutes] = useState(true);
   const [showBreaches, setShowBreaches] = useState(true);
+  const handledDeepLinkRef = useRef<string | null>(null);
 
   // Fetch data from Supabase
   const {
@@ -93,6 +94,56 @@ function App() {
   const isUsingLiveData = hasLiveShipments || hasLiveAlerts;
   const isHybridMode = isUsingLiveData && (mockShipments.length > 0 || mockAlerts.length > 0);
   const isOpsFocusMode = focusMode && activeTab === 'OPS';
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    if (!effectiveShipments.length) return;
+    const { search } = window.location;
+    if (!search || handledDeepLinkRef.current === search) return;
+
+    const params = new URLSearchParams(search);
+    const trackingId = params.get('trackingId') || params.get('trackingCode') || params.get('track') || '';
+    const jobId = params.get('jobId') || params.get('linkedJobId') || '';
+    const query = params.get('q') || params.get('search') || '';
+    const status = params.get('status') || '';
+
+    const exact = effectiveShipments.find((shipment) => {
+      const trackingMatch = trackingId && shipment.trackingCode.toLowerCase() === trackingId.toLowerCase();
+      const jobMatch = jobId && shipment.dossier?.linkedJobId?.toLowerCase() === jobId.toLowerCase();
+      const idMatch = trackingId && shipment.id.toLowerCase() === trackingId.toLowerCase();
+      return trackingMatch || jobMatch || idMatch;
+    });
+
+    const fuzzyQuery = (trackingId || jobId || query).toLowerCase().trim();
+    const fuzzy = !exact && fuzzyQuery
+      ? effectiveShipments.find((shipment) => {
+        const haystack = [
+          shipment.id,
+          shipment.trackingCode,
+          shipment.dossier?.linkedJobId,
+          shipment.status,
+          shipment.statusLabel,
+        ]
+          .filter(Boolean)
+          .join(' ')
+          .toLowerCase();
+        const statusMatches = !status || shipment.status.toLowerCase() === status.toLowerCase();
+        return statusMatches && haystack.includes(fuzzyQuery);
+      })
+      : null;
+
+    const targetShipment = exact || fuzzy;
+    if (!targetShipment) {
+      handledDeepLinkRef.current = search;
+      return;
+    }
+
+    setActiveTab('OPS');
+    setFocusMode(false);
+    setSelectedAlert(null);
+    setSelectedShipment(targetShipment);
+    handledDeepLinkRef.current = search;
+  }, [effectiveShipments]);
 
   const handleAlertClick = (alert: Alert) => {
     setSelectedAlert(alert);

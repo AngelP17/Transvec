@@ -1,5 +1,6 @@
 import { mockJourneyLegs, mockSensors, mockCarriers } from '../data/mockData';
 import { computeEtaBand } from '../lib/etaBands';
+import { buildYieldOpsDeepLink } from '../lib/deepLinks';
 import type { Shipment } from '../types';
 
 interface ShipmentDetailProps {
@@ -80,6 +81,7 @@ export default function ShipmentDetail({ shipment, onClose, onOpenDVR }: Shipmen
                 <span className="text-text-muted">Route</span>
                 <span className="text-text-bright">{shipment.dossier.route}</span>
               </div>
+              <OpenYieldOpsButton shipment={shipment} />
             </div>
           </section>
         )}
@@ -282,6 +284,20 @@ export default function ShipmentDetail({ shipment, onClose, onOpenDVR }: Shipmen
         </section>
       </div>
     </div>
+  );
+}
+
+function OpenYieldOpsButton({ shipment }: { shipment: Shipment }) {
+  return (
+    <button
+      onClick={() => {
+        const url = buildYieldOpsDeepLink(shipment);
+        window.open(url, '_blank', 'noopener,noreferrer');
+      }}
+      className="mt-2 w-full px-3 py-2 rounded border border-accent/40 bg-accent/10 text-accent text-xs font-semibold hover:bg-accent/20 transition-colors"
+    >
+      OPEN YIELDOPS
+    </button>
   );
 }
 
