@@ -597,8 +597,13 @@ export default function MapView({
   const isBrightPreview = mapStyleId !== 'darkmatter';
   const liveCaptureFallback = useMemo(() => {
     if (!focusShipment) return null;
-    return buildRoutePreviewImage(focusShipment, { width: 720, height: 360, bright: isBrightPreview });
+    try {
+      return buildRoutePreviewImage(focusShipment, { width: 720, height: 360, bright: isBrightPreview });
+    } catch {
+      return null;
+    }
   }, [focusShipment, isBrightPreview, styleVersion]);
+  const liveCaptureSrc = liveCaptureImage || liveCaptureFallback;
 
   const overlayPalette = useMemo(() => {
     const isSatellite = mapStyleId === 'satellite';
@@ -1951,15 +1956,24 @@ export default function MapView({
                 </form>
               </div>
               <div className="mt-4 h-40 rounded-xl border border-white/10 bg-black/60 relative overflow-hidden">
-                {(liveCaptureImage || liveCaptureFallback) && (
+                {liveCaptureSrc && (
                   <img
-                    src={liveCaptureImage || liveCaptureFallback || ''}
+                    src={liveCaptureSrc}
                     alt="Live location preview"
                     className="absolute inset-0 h-full w-full object-cover"
                     width={720}
                     height={360}
                     loading="lazy"
+                    onError={() => setLiveCaptureImage(null)}
                   />
+                )}
+                {!liveCaptureSrc && (
+                  <div className="absolute inset-0 bg-[radial-gradient(circle_at_20%_18%,rgba(255,255,255,0.16),transparent_35%),linear-gradient(160deg,#0b1118,#05070a_55%,#0c131c)]">
+                    <div className="absolute inset-0 opacity-30 [background-image:linear-gradient(rgba(255,255,255,0.12)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.1)_1px,transparent_1px)] [background-size:26px_26px]" />
+                    <div className="absolute left-6 top-8 h-2 w-2 rounded-full bg-white/80 shadow-[0_0_10px_rgba(255,255,255,0.55)]" />
+                    <div className="absolute right-8 bottom-8 h-2.5 w-2.5 rounded-full bg-warning shadow-[0_0_12px_rgba(255,176,0,0.65)]" />
+                    <div className="absolute left-8 right-10 top-[44%] border-t border-dashed border-white/30" />
+                  </div>
                 )}
                 <div className="absolute inset-0 bg-[linear-gradient(to_top,rgba(0,0,0,0.58),rgba(0,0,0,0.08)_45%,rgba(0,0,0,0.32))]" />
                 <div className="absolute top-3 right-3 text-[9px] uppercase tracking-[0.3em] text-white/60">Live Capture</div>
