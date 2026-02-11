@@ -603,7 +603,7 @@ export default function MapView({
       return null;
     }
   }, [focusShipment, isBrightPreview, styleVersion]);
-  const liveCaptureSrc = liveCaptureImage || liveCaptureFallback;
+  const liveCaptureSrc = liveCaptureFallback || liveCaptureImage;
 
   const overlayPalette = useMemo(() => {
     const isSatellite = mapStyleId === 'satellite';
@@ -702,6 +702,11 @@ export default function MapView({
     window.addEventListener('click', handleWindowClick);
     return () => window.removeEventListener('click', handleWindowClick);
   }, []);
+
+  useEffect(() => {
+    // Drop stale/tainted captures whenever focal context changes.
+    setLiveCaptureImage(null);
+  }, [focusShipment?.id, mapStyleId]);
 
   useEffect(() => {
     const captureFromMap = () => {
