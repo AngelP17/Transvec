@@ -263,9 +263,9 @@ export default function MapView({
   const mapMotionFrame = useRef<number | null>(null);
   const liveCaptureInterval = useRef<number | null>(null);
   const hasAutoFramedRef = useRef(false);
+  const appliedStyleIdRef = useRef<MapStyleId | null>(null);
   const styleEpochRef = useRef(0);
   const styleReadyEpochRef = useRef<number | null>(null);
-  const hasAppliedStyleRef = useRef(false);
   const [isLoaded, setIsLoaded] = useState(false);
   const [isStyleReady, setIsStyleReady] = useState(false);
   const [styleVersion, setStyleVersion] = useState(0);
@@ -339,6 +339,27 @@ export default function MapView({
       showToast(`Switched to ${label}`);
     }
   }, [mapStyleId, showToast]);
+
+  const rotateMapBy = useCallback((delta: number) => {
+    if (!map.current) return;
+    const nextBearing = map.current.getBearing() + delta;
+    map.current.rotateTo(nextBearing, {
+      duration: 450,
+      easing: cinematicEasing,
+      essential: true,
+    });
+  }, []);
+
+  const resetMapOrientation = useCallback(() => {
+    if (!map.current) return;
+    map.current.easeTo({
+      bearing: 0,
+      pitch: 45,
+      duration: 480,
+      easing: cinematicEasing,
+      essential: true,
+    });
+  }, []);
 
   const handleShareOps = useCallback(async () => {
     try {
@@ -710,6 +731,7 @@ export default function MapView({
         attributionControl: false,
       });
       map.current = mapInstance;
+      appliedStyleIdRef.current = mapStyleId;
 
       console.log('Map instance created');
 
@@ -723,6 +745,8 @@ export default function MapView({
       const scrollZoom = mapInstance.scrollZoom as any;
       scrollZoom?.setWheelZoomRate?.(1 / 550);
       scrollZoom?.setZoomRate?.(1 / 120);
+      mapInstance.dragRotate?.enable?.();
+      mapInstance.touchZoomRotate?.enableRotation?.();
 
       // Add navigation controls
       mapInstance.addControl(
@@ -769,7 +793,7 @@ export default function MapView({
     }
 
     return () => {
-      hasAppliedStyleRef.current = false;
+      appliedStyleIdRef.current = null;
       if (mapInstance) {
         if (handleLoad) mapInstance.off('load', handleLoad);
         if (handleStyleLoading) mapInstance.off('styleloading', handleStyleLoading);
@@ -1237,8 +1261,7 @@ export default function MapView({
   // Swap map style without animation
   useEffect(() => {
     if (!map.current || !isLoaded) return;
-    if (!hasAppliedStyleRef.current) {
-      hasAppliedStyleRef.current = true;
+    if (appliedStyleIdRef.current === mapStyleId) {
       return;
     }
     setIsStyleReady(false);
@@ -1246,6 +1269,7 @@ export default function MapView({
     styleEpochRef.current += 1;
     styleReadyEpochRef.current = null;
     const mapInstance = map.current;
+    appliedStyleIdRef.current = mapStyleId;
     const isRemoteStyle = typeof styleDefinition === 'string';
     let fallbackApplied = false;
     let styleErrorHandler: ((e: unknown) => void) | null = null;
@@ -1752,17 +1776,37 @@ export default function MapView({
                   {focusShipment ? `${focusShipment.origin.name} → ${focusShipment.destination.name}` : 'Awaiting focus'}
                 </div>
               </div>
-                <div className="mt-3">
+              <div className="mt-3">
                 <div className="flex items-center justify-between text-[10px] text-white/50 uppercase tracking-[0.2em]">
                   <span>Map Style</span>
                   <span className="text-[9px] text-white/40">{mapStyleId}</span>
+                </div>
+                <div className="mt-2 grid grid-cols-3 gap-2">
+                  <button
+                    onClick={() => rotateMapBy(-20)}
+                    className="rounded-lg border border-white/10 bg-white/5 px-2 py-1 text-[10px] font-semibold text-white/70 hover:bg-white/10 transition"
+                  >
+                    -20deg
+                  </button>
+                  <button
+                    onClick={resetMapOrientation}
+                    className="rounded-lg border border-white/20 bg-white/10 px-2 py-1 text-[10px] font-semibold text-white/80 hover:bg-white/15 transition"
+                  >
+                    North
+                  </button>
+                  <button
+                    onClick={() => rotateMapBy(20)}
+                    className="rounded-lg border border-white/10 bg-white/5 px-2 py-1 text-[10px] font-semibold text-white/70 hover:bg-white/10 transition"
+                  >
+                    +20deg
+                  </button>
                 </div>
                 <div className="mt-2 grid grid-cols-3 gap-2">
                   {MAP_STYLE_OPTIONS.map((style) => (
                     <button
                       key={style.id}
                       onClick={() => setMapStyle(style.id, true)}
-                      className={`rounded-lg border px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.25em] transition ${mapStyleId === style.id
+                      className={`rounded-lg border px-2 py-1 text-[9px] font-semibold uppercase tracking-[0.14em] leading-none transition min-w-0 ${mapStyleId === style.id
                           ? 'border-white/60 bg-white text-black'
                           : 'border-white/10 bg-white/5 text-white/70 hover:bg-white/10'
                         }`}

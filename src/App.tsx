@@ -32,7 +32,7 @@ function App() {
   const [selectedAlert, setSelectedAlert] = useState<Alert | null>(null);
   const [showDVR, setShowDVR] = useState(false);
   const [initialLoadComplete, setInitialLoadComplete] = useState(false);
-  const [settingsOpen, setSettingsOpen] = useState(true);
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const [operatorOpen, setOperatorOpen] = useState(false);
   const [focusMode, setFocusMode] = useState(false);
   const [showGeofences, setShowGeofences] = useState(true);
