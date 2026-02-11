@@ -4,17 +4,25 @@ import maplibregl, { type StyleSpecification } from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import {
   IconAdjustments,
+  IconAlertTriangle,
   IconArrowLeft,
   IconBell,
   IconChevronDown,
+  IconCpu,
+  IconDownload,
   IconEye,
   IconEyeOff,
   IconMenu2,
+  IconRefresh,
   IconSearch,
+  IconShieldCheck,
+  IconStack2,
+  IconTool,
   IconUserCircle,
   IconX,
 } from '@tabler/icons-react';
 import type { Shipment, Alert } from '../types';
+import type { FabHealthSummary } from '../lib/dataAdapter';
 import OpsIntelPanel from './OpsIntelPanel';
 import AssetDossierPanel from './AssetDossierPanel';
 import CarrierPerformanceIndex from './CarrierPerformanceIndex';
@@ -33,6 +41,10 @@ interface MapViewProps {
   selectedShipment: Shipment | null;
   onShipmentSelect: (shipment: Shipment) => void;
   alerts: Alert[];
+  liveData: boolean;
+  shipmentCount: number;
+  alertCount: number;
+  fabHealth: FabHealthSummary | null;
   showGeofences?: boolean;
   showRoutes?: boolean;
   showBreaches?: boolean;
@@ -41,6 +53,9 @@ interface MapViewProps {
   onOpenAlertsTab: () => void;
   onOpenOperatorPanel: () => void;
   onOpenSettingsPanel: () => void;
+  onRefresh: () => void;
+  onToggleOverlays: () => void;
+  onExport: () => void;
 }
 
 type MapStyleId = 'darkmatter' | 'satellite' | 'streets';
@@ -221,6 +236,11 @@ const statusColors: Record<string, string> = {
   HELD_CUSTOMS: '#FFB000',
 };
 
+function HealthDot({ status }: { status: 'ok' | 'warn' | 'critical' }) {
+  const color = status === 'ok' ? 'bg-success' : status === 'warn' ? 'bg-warning' : 'bg-critical';
+  return <span className={`inline-block w-1.5 h-1.5 rounded-full ${color}`} />;
+}
+
 function parseCoordinates(input: string) {
   const match = input.match(/(-?\d+(?:\.\d+)?)[,\s]+(-?\d+(?:\.\d+)?)/);
   if (!match) return null;
@@ -267,6 +287,10 @@ export default function MapView({
   selectedShipment,
   onShipmentSelect,
   alerts,
+  liveData,
+  shipmentCount,
+  alertCount,
+  fabHealth,
   showGeofences = true,
   showRoutes = true,
   showBreaches = true,
@@ -275,6 +299,9 @@ export default function MapView({
   onOpenAlertsTab,
   onOpenOperatorPanel,
   onOpenSettingsPanel,
+  onRefresh,
+  onToggleOverlays,
+  onExport,
 }: MapViewProps) {
   const yieldOpsHref = `${stripTrailingSlash(import.meta.env.VITE_YIELDOPS_BASE_URL || DEFAULT_YIELDOPS_BASE_URL)}/?source=transvec`;
   const mapContainer = useRef<HTMLDivElement>(null);
@@ -608,6 +635,14 @@ export default function MapView({
   const deviationsEnabled = overlaysEnabled;
   const showUiOverlays = !focusMode;
   const hasShipmentDetailOpen = Boolean(selectedShipment);
+  const agentStatus = fabHealth
+    ? (fabHealth.agentsOffline > 0 ? 'warn' : 'ok')
+    : 'ok';
+  const agentsOnline = fabHealth?.agentsOnline ?? 0;
+  const agentCount = fabHealth?.agentCount ?? 0;
+  const detections24h = fabHealth?.totalDetections24h ?? 0;
+  const dispatchCount = fabHealth?.dispatchCount ?? 0;
+  const pendingRecipeAdjustments = fabHealth?.pendingRecipeAdjustments ?? 0;
 
   const getOverlayInsertBeforeId = useCallback((mapInstance: maplibregl.Map) => {
     const layers = mapInstance.getStyle().layers || [];
@@ -1777,6 +1812,92 @@ export default function MapView({
               </div>
             </div>
             <div className="px-4 pb-4">
+              <div className="mt-4 rounded-xl border border-white/10 bg-black/60 p-3">
+                <div className="flex items-center gap-2">
+                  <span className="text-white/80">
+                    <IconCpu className="w-3.5 h-3.5" />
+                  </span>
+                  <div>
+                    <div className="text-[9px] uppercase tracking-[0.28em] text-white/40">System Status</div>
+                    <div className="text-[12px] font-semibold text-white">Operational Status</div>
+                  </div>
+                  <span className={`ml-auto text-[10px] px-2 py-0.5 rounded-full border ${liveData ? 'border-success text-success' : 'border-warning text-warning'}`}>
+                    {liveData ? 'LIVE' : 'DEMO'}
+                  </span>
+                </div>
+                <div className="mt-3 flex flex-wrap gap-2 text-[10px]">
+                  <button
+                    type="button"
+                    onClick={onRefresh}
+                    className="inline-flex items-center gap-1 rounded border border-white/10 bg-black/60 px-2 py-1 text-white hover:bg-white/10 cursor-pointer"
+                  >
+                    <IconRefresh className="w-3 h-3" />
+                    Refresh
+                  </button>
+                  <button
+                    type="button"
+                    onClick={onToggleOverlays}
+                    className="inline-flex items-center gap-1 rounded border border-white/10 bg-black/60 px-2 py-1 text-white hover:bg-white/10 cursor-pointer"
+                  >
+                    <IconStack2 className="w-3 h-3" />
+                    Overlays
+                  </button>
+                  <button
+                    type="button"
+                    onClick={onExport}
+                    className="inline-flex items-center gap-1 rounded border border-white/10 bg-black/60 px-2 py-1 text-white hover:bg-white/10 cursor-pointer"
+                  >
+                    <IconDownload className="w-3 h-3" />
+                    Export
+                  </button>
+                </div>
+                <div className="mt-3 grid grid-cols-2 gap-2 text-[10px]">
+                  <div className="rounded-lg border border-white/10 bg-black/50 px-2 py-1.5">
+                    <div className="text-white/50">Tracked</div>
+                    <div className="font-mono text-white text-base">{shipmentCount}</div>
+                  </div>
+                  <div className="rounded-lg border border-white/10 bg-black/50 px-2 py-1.5">
+                    <div className="text-white/50">Open Alerts</div>
+                    <div className={`font-mono text-base ${alertCount > 0 ? 'text-critical' : 'text-success'}`}>{alertCount}</div>
+                  </div>
+                </div>
+                <div className="mt-3 border-t border-white/10 pt-2 text-[10px]">
+                  <div className="flex items-center justify-between text-white/50">
+                    <div className="flex items-center gap-1.5">
+                      <HealthDot status={agentStatus} />
+                      <IconShieldCheck className="w-3 h-3" />
+                      Sentinel
+                    </div>
+                    <span className="font-mono text-white">{agentsOnline}/{agentCount}</span>
+                  </div>
+                  <div className="mt-1.5 flex items-center justify-between">
+                    <span className="text-white/45">Detections (24h)</span>
+                    <span className="font-mono text-warning">{detections24h}</span>
+                  </div>
+                  <div className="mt-1.5 flex items-center justify-between">
+                    <span className="text-white/45">Dispatch / Recipe</span>
+                    <span className="font-mono text-white">{dispatchCount} / {pendingRecipeAdjustments}</span>
+                  </div>
+                  {fabHealth && fabHealth.openMaintenanceCount > 0 && (
+                    <div className="mt-1.5 flex items-center justify-between">
+                      <div className="flex items-center gap-1.5 text-white/50">
+                        <IconTool className="w-3 h-3" />
+                        Maint.
+                      </div>
+                      <span className="font-mono text-warning">{fabHealth.openMaintenanceCount}</span>
+                    </div>
+                  )}
+                  {fabHealth && fabHealth.anomalyAlertCount > 0 && (
+                    <div className="mt-1.5 flex items-center justify-between">
+                      <div className="flex items-center gap-1.5 text-white/50">
+                        <IconAlertTriangle className="w-3 h-3" />
+                        ML Anomalies
+                      </div>
+                      <span className="font-mono text-warning">{fabHealth.anomalyAlertCount}</span>
+                    </div>
+                  )}
+                </div>
+              </div>
               <div className="mt-4 space-y-2">
                 <div className="flex items-center gap-2 bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-[11px] text-white/80">
                   <IconSearch className="w-3.5 h-3.5 text-white/60" />

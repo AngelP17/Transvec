@@ -3,7 +3,6 @@ import Sidebar from './components/Sidebar';
 import MapView from './components/MapView';
 import SettingsPanel from './components/SettingsPanel';
 import OperatorPanel from './components/OperatorPanel';
-import SystemStatusPanel from './components/SystemStatusPanel';
 import { useSupabaseData } from './hooks/useSupabaseData';
 import { mockShipments, mockAlerts } from './data/mockData';
 import type { ViewTab, Shipment, Alert } from './types';
@@ -333,26 +332,16 @@ function App() {
             </div>
           )}
 
-          {activeTab === 'OPS' && !selectedShipment && !isMobileLayout && (
-            <SystemStatusPanel
-              activeTab={activeTab}
-              liveData={isUsingLiveData}
-              shipmentCount={effectiveShipments.length}
-              alertCount={effectiveAlerts.filter(a => !a.acknowledged).length}
-              fabHealth={fabHealth}
-              onRefresh={refreshData}
-              onToggleOverlays={handleToggleOverlays}
-              onExport={handleExport}
-              focusMode={focusMode}
-            />
-          )}
-
           {activeTab === 'OPS' && (
             <MapView
               shipments={effectiveShipments}
               selectedShipment={selectedShipment}
               onShipmentSelect={handleShipmentSelect}
               alerts={effectiveAlerts}
+              liveData={isUsingLiveData}
+              shipmentCount={effectiveShipments.length}
+              alertCount={effectiveAlerts.filter(a => !a.acknowledged).length}
+              fabHealth={fabHealth}
               showGeofences={showGeofences}
               showRoutes={showRoutes}
               showBreaches={showBreaches}
@@ -361,6 +350,9 @@ function App() {
               onOpenAlertsTab={openAlertsTab}
               onOpenOperatorPanel={openOperatorPanelFromOps}
               onOpenSettingsPanel={openSettingsPanelFromOps}
+              onRefresh={refreshData}
+              onToggleOverlays={handleToggleOverlays}
+              onExport={handleExport}
             />
           )}
 
