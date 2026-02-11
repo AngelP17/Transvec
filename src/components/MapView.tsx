@@ -520,6 +520,20 @@ export default function MapView({
     });
   }, []);
 
+  const easeFocusToPoint = useCallback((lng: number, lat: number) => {
+    if (!map.current) return;
+    const currentZoom = map.current.getZoom();
+    map.current.easeTo({
+      center: [lng, lat],
+      zoom: Math.max(currentZoom, 4.9),
+      pitch: 45,
+      bearing: -20,
+      duration: 720,
+      easing: cinematicEasing,
+      essential: true,
+    });
+  }, []);
+
   const handleShipmentFocus = useCallback((shipment: Shipment) => {
     onShipmentSelect(shipment);
     if (typeof window !== 'undefined' && window.innerWidth < 1024 && !focusMode) {
@@ -1297,6 +1311,35 @@ export default function MapView({
       if (mapInstance.getLayer('geofence-breaches-circle')) {
         mapInstance.setPaintProperty('geofence-breaches-circle', 'circle-radius', 7 + pulse * 2.4);
       }
+      if (mapInstance.getLayer('shipment-points-halo')) {
+        mapInstance.setPaintProperty('shipment-points-halo', 'circle-radius', [
+          'case',
+          ['get', 'isSelected'], 13.5 + pulse * 4.2,
+          ['==', ['get', 'riskLevel'], 'HIGH'], 12 + slowPulse * 1.2,
+          ['==', ['get', 'riskLevel'], 'MED'], 11 + slowPulse * 1,
+          10 + slowPulse * 0.8,
+        ]);
+        mapInstance.setPaintProperty('shipment-points-halo', 'circle-color', [
+          'case',
+          ['get', 'isSelected'], `rgba(255,255,255,${0.2 + pulse * 0.28})`,
+          ['get', 'hasCriticalAlert'], 'rgba(255,77,79,0.35)',
+          ['==', ['get', 'riskLevel'], 'HIGH'], 'rgba(255,77,79,0.24)',
+          ['==', ['get', 'riskLevel'], 'MED'], 'rgba(255,176,0,0.22)',
+          'rgba(229,231,235,0.16)',
+        ]);
+      }
+      if (mapInstance.getLayer('shipment-points-circle')) {
+        mapInstance.setPaintProperty('shipment-points-circle', 'circle-radius', [
+          'case',
+          ['get', 'isSelected'], 6.7 + pulse * 1.3,
+          5,
+        ]);
+        mapInstance.setPaintProperty('shipment-points-circle', 'circle-stroke-width', [
+          'case',
+          ['get', 'isSelected'], 2 + pulse * 0.9,
+          1.4,
+        ]);
+      }
 
       const routeLayers = ['route-paths-truck', 'route-paths-train', 'route-paths-air', 'route-paths-sea'];
       routeLayers.forEach((layerId, index) => {
@@ -1497,6 +1540,7 @@ export default function MapView({
       if (!shipment) return;
       handleShipmentFocus(shipment);
       if (event?.lngLat && shipment.currentLocation) {
+        easeFocusToPoint(event.lngLat.lng, event.lngLat.lat);
         showShipmentPopup(shipment, event.lngLat.lng, event.lngLat.lat);
       }
       showToast(`Focused ${shipment.trackingCode}`);
@@ -1527,7 +1571,7 @@ export default function MapView({
         mapInstance.getCanvas().style.cursor = '';
       }
     };
-  }, [effectiveShipments, handleShipmentFocus, isLoaded, isStyleReady, showShipmentPopup, showToast, styleVersion]);
+  }, [easeFocusToPoint, effectiveShipments, handleShipmentFocus, isLoaded, isStyleReady, showShipmentPopup, showToast, styleVersion]);
 
   // Click interaction for raw map canvas (select nearest asset from any point)
   useEffect(() => {
@@ -1564,6 +1608,7 @@ export default function MapView({
       if (!nearestResult.shipment) return;
 
       handleShipmentFocus(nearestResult.shipment);
+      easeFocusToPoint(event.lngLat.lng, event.lngLat.lat);
       showShipmentPopup(nearestResult.shipment, event.lngLat.lng, event.lngLat.lat);
       showToast(`Selected ${nearestResult.shipment.trackingCode} - ${nearestResult.distanceKm.toFixed(1)}km away`);
     };
@@ -1572,7 +1617,7 @@ export default function MapView({
     return () => {
       mapInstance.off('click', handleMapClick);
     };
-  }, [handleShipmentFocus, isLoaded, isStyleReady, shipmentsWithLocation, showShipmentPopup, showToast, styleVersion]);
+  }, [easeFocusToPoint, handleShipmentFocus, isLoaded, isStyleReady, shipmentsWithLocation, showShipmentPopup, showToast, styleVersion]);
 
   // Fly to selected shipment
   useEffect(() => {
