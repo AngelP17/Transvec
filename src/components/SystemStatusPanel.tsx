@@ -57,7 +57,7 @@ export default function SystemStatusPanel({
     return null;
   }
   const copy = TAB_COPY[activeTab];
-  const panelPosition = 'left-4 top-24 w-[min(16rem,calc(100%-6rem))] sm:w-64';
+  const panelPosition = 'left-3 right-3 top-[4.75rem] w-auto sm:left-4 sm:right-auto sm:top-24 sm:w-64';
   const isOps = activeTab === 'OPS';
 
   const agentStatus = fabHealth
@@ -76,7 +76,7 @@ export default function SystemStatusPanel({
   const pendingRecipeAdjustments = fabHealth?.pendingRecipeAdjustments ?? 0;
 
   return (
-    <div className={`absolute ${panelPosition} max-h-[calc(100vh-7.5rem)] overflow-y-auto z-30 rounded-xl border border-white/10 bg-black/75 shadow-xl px-4 py-3`}>
+    <div className={`absolute ${panelPosition} max-h-[calc(100vh-10rem)] sm:max-h-[calc(100vh-7.5rem)] overflow-y-auto z-30 rounded-xl border border-white/10 bg-black/75 shadow-xl px-4 py-3`}>
       <div className="flex items-center gap-2">
         <span className="text-white/80">{copy.icon}</span>
         <div>

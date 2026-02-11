@@ -38,6 +38,7 @@ function App() {
   const [showGeofences, setShowGeofences] = useState(true);
   const [showRoutes, setShowRoutes] = useState(true);
   const [showBreaches, setShowBreaches] = useState(true);
+  const [isMobileLayout, setIsMobileLayout] = useState(false);
   const handledDeepLinkRef = useRef<string | null>(null);
 
   useEffect(() => {
@@ -45,6 +46,15 @@ function App() {
     if (window.innerWidth < 1024) {
       setIsWorkbookOpen(false);
     }
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const media = window.matchMedia('(max-width: 1023px)');
+    const update = () => setIsMobileLayout(media.matches);
+    update();
+    media.addEventListener('change', update);
+    return () => media.removeEventListener('change', update);
   }, []);
 
   // Fetch data from Supabase
@@ -269,7 +279,7 @@ function App() {
   };
 
   return (
-    <div className="flex h-[100dvh] min-h-0 w-full bg-void text-text-bright overflow-hidden">
+    <div className={`flex h-[100dvh] min-h-0 w-full overflow-hidden bg-void text-text-bright ${isMobileLayout ? 'flex-col' : 'flex-row'}`}>
       {/* Sidebar Navigation */}
       <Sidebar
         activeTab={activeTab}
@@ -279,10 +289,14 @@ function App() {
         isSettingsOpen={settingsOpen}
         onOpenOperator={() => { setOperatorOpen((prev) => !prev); setSettingsOpen(false); setFocusMode(false); }}
         isOperatorOpen={operatorOpen}
+        isMobileLayout={isMobileLayout}
       />
 
       {/* Main Content Area */}
-      <div className="flex-1 flex flex-col relative overflow-hidden min-w-0" style={{ height: '100%' }}>
+      <div
+        className={`relative flex min-w-0 flex-1 flex-col overflow-hidden ${isMobileLayout ? 'order-1 pb-20' : 'order-2 pb-0'}`}
+        style={{ height: '100%' }}
+      >
         {/* Map / Visualization Area */}
         <div
           className="flex-1 relative transition-all duration-300 w-full"
@@ -319,7 +333,7 @@ function App() {
             </div>
           )}
 
-          {activeTab === 'OPS' && !selectedShipment && (
+          {activeTab === 'OPS' && !selectedShipment && !isMobileLayout && (
             <SystemStatusPanel
               activeTab={activeTab}
               liveData={isUsingLiveData}

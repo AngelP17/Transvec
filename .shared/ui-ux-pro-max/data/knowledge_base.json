@@ -1,0 +1,274 @@
+{
+  "domains": {
+    "product": [
+      {
+        "title": "SaaS / Ops Dashboard",
+        "tags": ["saas", "dashboard", "ops", "b2b", "analytics", "monitoring"],
+        "bullets": [
+          "Prioritize information density with progressive disclosure.",
+          "Keep a fixed alert surface and a collapsible detail rail.",
+          "Use status colors sparingly: success/warning/critical only."
+        ]
+      },
+      {
+        "title": "Logistics / Fleet Control",
+        "tags": ["logistics", "fleet", "map", "route", "shipment", "geo"],
+        "bullets": [
+          "Map-first layout: overlays must never block pan/zoom/tap.",
+          "Use bottom-sheet controls on mobile instead of side rails.",
+          "Expose route/style toggles with large touch targets."
+        ]
+      },
+      {
+        "title": "Healthcare / MedTech",
+        "tags": ["healthcare", "medical", "clinic", "patient", "medtech"],
+        "bullets": [
+          "Favor calm visual rhythm with high readability.",
+          "Use conservative motion and explicit validation states.",
+          "Add strong contrast and assistive labeling patterns."
+        ]
+      }
+    ],
+    "style": [
+      {
+        "title": "Glassmorphism",
+        "tags": ["glassmorphism", "frosted", "blur", "overlay"],
+        "bullets": [
+          "Use higher opacity on light mode (>=80%) for readability.",
+          "Avoid stacking too many translucent layers over map/data.",
+          "Pair with strong border contrast and subtle shadowing."
+        ]
+      },
+      {
+        "title": "Minimalism",
+        "tags": ["minimal", "clean", "professional", "simple"],
+        "bullets": [
+          "Limit visual vocabulary: one accent, one neutral ramp.",
+          "Use spacing and typography for hierarchy before color.",
+          "Keep component states obvious without ornamental motion."
+        ]
+      }
+    ],
+    "typography": [
+      {
+        "title": "Professional Pairing",
+        "tags": ["professional", "corporate", "b2b", "modern"],
+        "bullets": [
+          "Headings: Instrument Serif (italic accents only).",
+          "Body/UI: Instrument Sans with 14-16px baseline.",
+          "Data: JetBrains Mono for telemetry values only."
+        ]
+      },
+      {
+        "title": "Elegant Pairing",
+        "tags": ["elegant", "luxury", "beauty", "editorial"],
+        "bullets": [
+          "Headings: high-contrast serif; body: geometric sans.",
+          "Increase line-height and reduce uppercase tracking overload.",
+          "Reserve italics for short accents, not full paragraphs."
+        ]
+      }
+    ],
+    "color": [
+      {
+        "title": "Ops Dark Palette",
+        "tags": ["ops", "dark", "dashboard", "monitoring", "logistics"],
+        "bullets": [
+          "Primary: #0D0D0F, Surface: #17171A, Border: #2A2A2F.",
+          "Text high: #E5E7EB, text muted: #8A8A92.",
+          "States: success #0F9960, warning #FFB000, critical #FF4D4F."
+        ]
+      },
+      {
+        "title": "Fintech Clean Palette",
+        "tags": ["fintech", "saas", "trust", "clean"],
+        "bullets": [
+          "Use slate base with restrained blue accent.",
+          "Keep CTA color distinct from warning/critical states.",
+          "Never rely on color alone for state communication."
+        ]
+      }
+    ],
+    "landing": [
+      {
+        "title": "Hero-Centric Structure",
+        "tags": ["hero", "landing", "cta", "conversion"],
+        "bullets": [
+          "Flow: Hero -> social proof -> feature value -> CTA.",
+          "Show product evidence in first viewport.",
+          "Use one primary CTA phrase consistently."
+        ]
+      },
+      {
+        "title": "Social-Proof Heavy Structure",
+        "tags": ["testimonial", "case-study", "trust", "proof"],
+        "bullets": [
+          "Place trust marks and case studies above pricing.",
+          "Quantify outcomes with specific metrics.",
+          "Keep testimonial cards short and skimmable."
+        ]
+      }
+    ],
+    "chart": [
+      {
+        "title": "Trend / Time Series",
+        "tags": ["trend", "timeline", "timeseries", "line", "monitoring"],
+        "bullets": [
+          "Use line/area charts for rate-over-time signals.",
+          "Include baseline, threshold, and incident markers.",
+          "Avoid more than 4 concurrent lines on mobile."
+        ]
+      },
+      {
+        "title": "Comparison",
+        "tags": ["comparison", "bar", "ranking", "category"],
+        "bullets": [
+          "Use horizontal bars for long category labels.",
+          "Sort values descending for fast scan.",
+          "Highlight only one focal series."
+        ]
+      }
+    ],
+    "ux": [
+      {
+        "title": "Responsive + Touch",
+        "tags": ["responsive", "mobile", "touch", "viewport", "breakpoint"],
+        "bullets": [
+          "No fixed overlays should block primary canvas interactions on mobile.",
+          "Target minimum touch area of 44x44px.",
+          "Prefer bottom sheet + bottom nav over stacked side panels."
+        ]
+      },
+      {
+        "title": "Z-index + Layering",
+        "tags": ["z-index", "overlay", "stacking", "modal", "panel"],
+        "bullets": [
+          "Define a single layering scale and stick to it.",
+          "Use pointer-events-none on decorative layers only.",
+          "Audit hidden panels for offscreen hitbox interception."
+        ]
+      },
+      {
+        "title": "Accessibility",
+        "tags": ["accessibility", "a11y", "contrast", "keyboard", "focus"],
+        "bullets": [
+          "Maintain visible focus rings for keyboard users.",
+          "Hit 4.5:1 contrast for body text and controls.",
+          "Use reduced-motion media query for nonessential animation."
+        ]
+      }
+    ],
+    "prompt": [
+      {
+        "title": "CSS Prompt Keywords",
+        "tags": ["prompt", "css", "style", "keywords"],
+        "bullets": [
+          "Use terms like: high-contrast, touch-safe spacing, layered gradient backdrop.",
+          "Specify mobile-first with non-blocking overlays.",
+          "State exact constraints for accessibility and interaction."
+        ]
+      }
+    ]
+  },
+  "stacks": {
+    "html-tailwind": [
+      {
+        "title": "Tailwind Responsive Foundation",
+        "tags": ["responsive", "layout", "tailwind", "mobile"],
+        "bullets": [
+          "Build mobile-first, then enhance via sm/md/lg breakpoints.",
+          "Use explicit pointer-events utility classes for overlay layers.",
+          "Prefer CSS vars for shared color tokens."
+        ]
+      }
+    ],
+    "react": [
+      {
+        "title": "React UI State Boundaries",
+        "tags": ["react", "state", "hooks", "performance", "layout"],
+        "bullets": [
+          "Keep viewport/layout state close to app shell and pass explicit props.",
+          "Avoid duplicate media-query logic across unrelated components.",
+          "Use memoization only where render profiling shows benefit."
+        ]
+      }
+    ],
+    "nextjs": [
+      {
+        "title": "Next.js UI Delivery",
+        "tags": ["nextjs", "ssr", "routing", "image", "performance"],
+        "bullets": [
+          "Use server components for data-heavy static UI sections.",
+          "Split interactive panels into client components.",
+          "Enforce responsive image sizing and priority only above fold."
+        ]
+      }
+    ],
+    "vue": [
+      {
+        "title": "Vue Composition UI Patterns",
+        "tags": ["vue", "composition", "pinia", "router"],
+        "bullets": [
+          "Group layout state in composables to reduce prop drilling.",
+          "Keep interactive overlays isolated with explicit emits.",
+          "Use computed for derived panel datasets."
+        ]
+      }
+    ],
+    "svelte": [
+      {
+        "title": "Svelte Reactive Layouts",
+        "tags": ["svelte", "stores", "reactive", "layout"],
+        "bullets": [
+          "Use stores for global layout mode and panel visibility.",
+          "Keep transitions lightweight on mobile.",
+          "Guard browser-only APIs in onMount."
+        ]
+      }
+    ],
+    "swiftui": [
+      {
+        "title": "SwiftUI Structure",
+        "tags": ["swiftui", "navigation", "state", "animation"],
+        "bullets": [
+          "Model overlays as sheets for mobile ergonomics.",
+          "Use size classes and safe-area insets explicitly.",
+          "Avoid layered ZStack blockers over map gestures."
+        ]
+      }
+    ],
+    "react-native": [
+      {
+        "title": "React Native Patterns",
+        "tags": ["react-native", "navigation", "gesture", "mobile"],
+        "bullets": [
+          "Use bottom tabs for main nav and modal sheets for tools.",
+          "Respect hitSlop and minimum touch targets.",
+          "Keep map gestures independent from overlay responders."
+        ]
+      }
+    ],
+    "flutter": [
+      {
+        "title": "Flutter Layout Practices",
+        "tags": ["flutter", "widget", "layout", "responsive"],
+        "bullets": [
+          "Use LayoutBuilder/MediaQuery for breakpoint-safe UIs.",
+          "Keep overlays in controlled stacks with clear hit testing.",
+          "Use const widgets and selective rebuilds for smoothness."
+        ]
+      }
+    ],
+    "shadcn": [
+      {
+        "title": "shadcn/ui Patterns",
+        "tags": ["shadcn", "radix", "tailwind", "forms", "a11y"],
+        "bullets": [
+          "Use Radix primitives for dialogs, sheets, and menus.",
+          "Do not customize away focus outlines.",
+          "Prefer tokenized classnames for theme consistency."
+        ]
+      }
+    ]
+  }
+}

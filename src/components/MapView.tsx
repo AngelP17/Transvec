@@ -51,42 +51,69 @@ const MAP_STYLE_OPTIONS: Array<{ id: MapStyleId; label: string }> = [
   { id: 'streets', label: 'Streets' },
 ];
 
+function cloneStyleDefinition(style: StyleSpecification): StyleSpecification {
+  if (typeof structuredClone === 'function') {
+    return structuredClone(style);
+  }
+  return JSON.parse(JSON.stringify(style)) as StyleSpecification;
+}
+
 const FALLBACK_STYLE_DEFINITIONS: Record<MapStyleId, StyleSpecification> = {
   darkmatter: {
     version: 8,
     sources: {
       darkmatter: {
         type: 'raster',
-        tiles: ['https://a.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png'],
+        tiles: [
+          'https://a.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png',
+          'https://b.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png',
+          'https://c.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png',
+        ],
         tileSize: 256,
         attribution: '&copy; OpenStreetMap contributors &copy; CARTO',
       },
     },
-    layers: [{ id: 'darkmatter', type: 'raster', source: 'darkmatter' }],
+    layers: [
+      { id: 'darkmatter-background', type: 'background', paint: { 'background-color': '#0a0e12' } },
+      { id: 'darkmatter', type: 'raster', source: 'darkmatter' },
+    ],
   },
   satellite: {
     version: 8,
     sources: {
       satellite: {
         type: 'raster',
-        tiles: ['https://services.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}'],
+        tiles: [
+          'https://services.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+          'https://basemap.nationalmap.gov/arcgis/rest/services/USGSImageryOnly/MapServer/tile/{z}/{y}/{x}',
+        ],
         tileSize: 256,
         attribution: '&copy; Esri & contributors',
       },
     },
-    layers: [{ id: 'satellite', type: 'raster', source: 'satellite' }],
+    layers: [
+      { id: 'satellite-background', type: 'background', paint: { 'background-color': '#091018' } },
+      { id: 'satellite', type: 'raster', source: 'satellite' },
+    ],
   },
   streets: {
     version: 8,
     sources: {
       streets: {
         type: 'raster',
-        tiles: ['https://tile.openstreetmap.org/{z}/{x}/{y}.png'],
+        tiles: [
+          'https://a.tile.openstreetmap.org/{z}/{x}/{y}.png',
+          'https://b.tile.openstreetmap.org/{z}/{x}/{y}.png',
+          'https://c.tile.openstreetmap.org/{z}/{x}/{y}.png',
+        ],
         tileSize: 256,
         attribution: '&copy; OpenStreetMap contributors',
       },
     },
-    layers: [{ id: 'streets', type: 'raster', source: 'streets' }],
+    layers: [
+      { id: 'streets-background', type: 'background', paint: { 'background-color': '#f2f4f7' } },
+      { id: 'streets', type: 'raster', source: 'streets' },
+    ],
   },
 };
 
@@ -276,6 +303,7 @@ export default function MapView({
   const [searchTerm, setSearchTerm] = useState('');
   const [locationQuery, setLocationQuery] = useState('');
   const [isRightRailOpen, setIsRightRailOpen] = useState(true);
+  const [isMobileLayout, setIsMobileLayout] = useState(false);
   const [toastMsg, setToastMsg] = useState<string | null>(null);
   const [liveCaptureImage, setLiveCaptureImage] = useState<string | null>(null);
   const [isOperatorMenuOpen, setIsOperatorMenuOpen] = useState(false);
@@ -322,7 +350,7 @@ export default function MapView({
 
   const styleDefinition = useMemo(() => {
     // Keep style switching deterministic and instant: use local raster style definitions.
-    return structuredClone(FALLBACK_STYLE_DEFINITIONS[mapStyleId]);
+    return cloneStyleDefinition(FALLBACK_STYLE_DEFINITIONS[mapStyleId]);
   }, [mapStyleId]);
 
   const setMapStyle = useCallback((nextStyle: MapStyleId, announce = false) => {
@@ -589,6 +617,11 @@ export default function MapView({
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
+    const mobileMedia = window.matchMedia('(max-width: 1023px)');
+    const syncMobile = () => setIsMobileLayout(mobileMedia.matches);
+    syncMobile();
+    mobileMedia.addEventListener('change', syncMobile);
+
     if (window.innerWidth < 1024) {
       setIsRightRailOpen(false);
     }
@@ -599,7 +632,10 @@ export default function MapView({
       }
     };
     media.addEventListener('change', handleChange);
-    return () => media.removeEventListener('change', handleChange);
+    return () => {
+      media.removeEventListener('change', handleChange);
+      mobileMedia.removeEventListener('change', syncMobile);
+    };
   }, []);
 
   useEffect(() => {
@@ -607,6 +643,12 @@ export default function MapView({
       setIsRightRailOpen(true);
     }
   }, [focusMode]);
+
+  useEffect(() => {
+    if (isMobileLayout && hasShipmentDetailOpen) {
+      setIsRightRailOpen(false);
+    }
+  }, [hasShipmentDetailOpen, isMobileLayout]);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -1272,7 +1314,7 @@ export default function MapView({
     const applyFallbackStyle = () => {
       if (disposed || fallbackApplied || !map.current) return;
       fallbackApplied = true;
-      map.current.setStyle(structuredClone(FALLBACK_STYLE_DEFINITIONS[mapStyleId]), { diff: false });
+      map.current.setStyle(cloneStyleDefinition(FALLBACK_STYLE_DEFINITIONS[mapStyleId]), { diff: false });
       showToast(`Using fallback ${MAP_STYLE_OPTIONS.find((s) => s.id === mapStyleId)?.label || mapStyleId} style`);
     };
 
@@ -1668,7 +1710,7 @@ export default function MapView({
           {showUiOverlays && !isRightRailOpen && (
             <button
               onClick={() => setIsRightRailOpen(true)}
-              className="lg:hidden absolute top-24 right-4 z-30 flex items-center gap-2 px-3 py-2 rounded-full bg-black/80 border border-white/10 text-white/80 text-[11px] shadow-xl"
+              className={`absolute z-30 flex items-center gap-2 px-3 py-2 rounded-full bg-black/85 border border-white/10 text-white/80 text-[11px] shadow-xl cursor-pointer ${isMobileLayout ? 'bottom-[6.1rem] right-4' : 'top-24 right-4 lg:hidden'}`}
             >
               <IconMenu2 className="w-4 h-4" />
               Panel
@@ -1677,7 +1719,7 @@ export default function MapView({
 
 
 
-          {showUiOverlays && !hasShipmentDetailOpen && (
+          {showUiOverlays && !hasShipmentDetailOpen && !isMobileLayout && (
             <div className="absolute bottom-4 left-4 z-10 bg-black/80 border border-white/10 p-3 rounded-lg shadow-xl pointer-events-none">
               <div className="text-[10px] font-bold tracking-[0.3em] text-white/50 mb-2">STATUS</div>
               {Object.entries(statusColors).map(([status, color]) => (
@@ -1698,10 +1740,15 @@ export default function MapView({
           )}
 
           <div
-            className={`absolute top-20 right-4 z-10 w-[calc(100%-2rem)] max-w-[22rem] sm:w-80 bg-black/85 border border-white/10 rounded-2xl shadow-2xl transition-all duration-300 max-h-[calc(100vh-6rem)] overflow-y-auto ${isRightRailOpen
-              ? 'translate-x-0 opacity-100 pointer-events-auto'
-              : 'translate-x-[120%] opacity-0 pointer-events-none'
-              } lg:translate-x-0 lg:opacity-100 lg:pointer-events-auto`}
+            className={`absolute z-10 border border-white/10 rounded-2xl shadow-2xl transition-all duration-300 overflow-y-auto ${isMobileLayout
+              ? 'left-3 right-3 bottom-[5.75rem] max-h-[min(62dvh,34rem)] bg-black/96 backdrop-blur-md'
+              : 'right-4 top-20 w-[calc(100%-2rem)] max-w-[22rem] sm:w-80 max-h-[calc(100vh-6rem)] bg-black/85'
+              } ${isRightRailOpen
+                ? 'translate-y-0 translate-x-0 opacity-100 pointer-events-auto'
+                : isMobileLayout
+                  ? 'translate-y-[112%] opacity-0 pointer-events-none'
+                  : 'translate-x-[120%] opacity-0 pointer-events-none'
+              } ${isMobileLayout ? '' : 'lg:translate-x-0 lg:opacity-100 lg:pointer-events-auto'}`}
           >
             <div className="flex items-center justify-between px-4 pt-4">
               <div className="flex items-center gap-2">
@@ -1711,6 +1758,7 @@ export default function MapView({
                   </span>
                 )}
                 <button
+                  type="button"
                   onClick={toggleFocusMode}
                   className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.2em] transition ${focusMode ? 'bg-white text-black' : 'bg-white/10 text-white/70 hover:bg-white/20'
                     }`}
@@ -1719,8 +1767,9 @@ export default function MapView({
                   Focus
                 </button>
                 <button
+                  type="button"
                   onClick={() => setIsRightRailOpen(false)}
-                  className={`lg:hidden p-1 rounded-full hover:bg-white/10 text-white/70 ${focusMode ? 'hidden' : ''}`}
+                  className={`p-1 rounded-full hover:bg-white/10 text-white/70 ${focusMode ? 'hidden' : ''} ${isMobileLayout ? '' : 'lg:hidden'}`}
                   aria-label="Close panel"
                 >
                   <IconX className="w-4 h-4" />
@@ -1797,18 +1846,21 @@ export default function MapView({
                 </div>
                 <div className="mt-2 grid grid-cols-3 gap-2">
                   <button
+                    type="button"
                     onClick={() => rotateMapBy(-20)}
                     className="rounded-lg border border-white/10 bg-white/5 px-2 py-1 text-[10px] font-semibold text-white/70 hover:bg-white/10 transition"
                   >
                     -20deg
                   </button>
                   <button
+                    type="button"
                     onClick={resetMapOrientation}
                     className="rounded-lg border border-white/20 bg-white/10 px-2 py-1 text-[10px] font-semibold text-white/80 hover:bg-white/15 transition"
                   >
                     North
                   </button>
                   <button
+                    type="button"
                     onClick={() => rotateMapBy(20)}
                     className="rounded-lg border border-white/10 bg-white/5 px-2 py-1 text-[10px] font-semibold text-white/70 hover:bg-white/10 transition"
                   >
@@ -1819,6 +1871,7 @@ export default function MapView({
                   {MAP_STYLE_OPTIONS.map((style) => (
                     <button
                       key={style.id}
+                      type="button"
                       onClick={() => setMapStyle(style.id, true)}
                       className={`rounded-lg border px-2 py-1 text-[9px] font-semibold uppercase tracking-[0.14em] leading-none transition min-w-0 ${mapStyleId === style.id
                           ? 'border-white/60 bg-white text-black'
@@ -1876,6 +1929,7 @@ export default function MapView({
                   <span>Results</span>
                   {normalizedSearchTerm && (
                     <button
+                      type="button"
                       onClick={() => setSearchTerm('')}
                       className="text-[10px] text-white/60 hover:text-white/80"
                     >
@@ -1887,6 +1941,7 @@ export default function MapView({
                   {displayedResults.map((shipment) => (
                     <button
                       key={shipment.id}
+                      type="button"
                       onClick={() => handleShipmentFocus(shipment)}
                       className={`w-full text-left px-3 py-2 rounded-lg border transition ${selectedShipment?.id === shipment.id
                         ? 'border-white/40 bg-white/10'
@@ -1936,6 +1991,7 @@ export default function MapView({
                       {locationMatches.slice(0, 3).map((shipment) => (
                         <button
                           key={`loc-${shipment.id}`}
+                          type="button"
                           onClick={() => handleShipmentFocus(shipment)}
                           className="w-full text-left px-3 py-2 rounded-lg border border-white/10 bg-white/5 hover:bg-white/10 transition"
                         >
@@ -1951,12 +2007,14 @@ export default function MapView({
               </div>
               <div className="mt-4 grid grid-cols-2 gap-2">
                 <button
+                  type="button"
                   onClick={() => { window.print(); showToast('Print dialog opened'); }}
                   className="py-2 rounded-lg bg-white/10 text-white/80 text-[11px] font-semibold hover:bg-white/20 transition"
                 >
                   Export PDF
                 </button>
                 <button
+                  type="button"
                   onClick={() => {
                     void handleShareOps();
                   }}
@@ -1967,14 +2025,14 @@ export default function MapView({
               </div>
             </div>
           </div>
-          {showUiOverlays && !isRightRailOpen && !hasShipmentDetailOpen && (
+          {showUiOverlays && !isMobileLayout && !isRightRailOpen && !hasShipmentDetailOpen && (
             <>
               <OpsIntelPanel shipments={effectiveShipments} alerts={effectiveAlerts} />
               <CarrierPerformanceIndex shipments={effectiveShipments} alerts={effectiveAlerts} />
               <MissionTimelinePanel shipments={effectiveShipments} alerts={effectiveAlerts} />
             </>
           )}
-          {showUiOverlays && visibleSelectedShipment && !hasShipmentDetailOpen && (
+          {showUiOverlays && !isMobileLayout && visibleSelectedShipment && !hasShipmentDetailOpen && (
             <AssetDossierPanel shipment={visibleSelectedShipment} />
           )}
 

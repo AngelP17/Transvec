@@ -6,7 +6,8 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "ux:search": "python3 .shared/ui-ux-pro-max/scripts/search.py"
   },
   "dependencies": {
     "@maptiler/sdk": "^3.11.0",
