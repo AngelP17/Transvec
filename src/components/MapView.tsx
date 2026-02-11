@@ -51,12 +51,6 @@ const MAP_STYLE_OPTIONS: Array<{ id: MapStyleId; label: string }> = [
   { id: 'streets', label: 'Streets' },
 ];
 
-const MAPTILER_STYLE_IDS: Record<MapStyleId, string> = {
-  darkmatter: 'dataviz-dark',
-  satellite: 'satellite',
-  streets: 'streets-v2',
-};
-
 const FALLBACK_STYLE_DEFINITIONS: Record<MapStyleId, StyleSpecification> = {
   darkmatter: {
     version: 8,
@@ -292,7 +286,6 @@ export default function MapView({
     setTimeout(() => setToastMsg(null), 2200);
   }, []);
   const toggleFocusMode = useCallback(() => onFocusModeChange(!focusMode), [focusMode, onFocusModeChange]);
-  const mapTilerKey = import.meta.env.VITE_MAPTILER_KEY;
   const normalizedSearchTerm = normalizeSearch(searchTerm);
 
   const filteredShipments = useMemo(() => {
@@ -328,9 +321,9 @@ export default function MapView({
   const { geofences } = useGeofences(effectiveShipments);
 
   const styleDefinition = useMemo(() => {
-    if (!mapTilerKey) return structuredClone(FALLBACK_STYLE_DEFINITIONS[mapStyleId]);
-    return `https://api.maptiler.com/maps/${MAPTILER_STYLE_IDS[mapStyleId]}/style.json?key=${mapTilerKey}`;
-  }, [mapStyleId, mapTilerKey]);
+    // Keep style switching deterministic and instant: use local raster style definitions.
+    return structuredClone(FALLBACK_STYLE_DEFINITIONS[mapStyleId]);
+  }, [mapStyleId]);
 
   const setMapStyle = useCallback((nextStyle: MapStyleId, announce = false) => {
     if (nextStyle === mapStyleId) return;
