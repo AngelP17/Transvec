@@ -84,9 +84,11 @@ export default function AlertPanel({ alerts, onAlertClick, selectedAlert, onAckn
   const [acknowledgedIds, setAcknowledgedIds] = useState<Set<string>>(new Set());
   const [triageMap, setTriageMap] = useState<Record<string, { status: TriageStatus; assignee?: string; updatedAt: number }>>({});
   const [actionFeedback, setActionFeedback] = useState<string | null>(null);
+  const [diagnosticReport, setDiagnosticReport] = useState<string | null>(null);
 
   useEffect(() => {
     setActionFeedback(null);
+    setDiagnosticReport(null);
   }, [selectedAlert?.id]);
 
   const resolveTriage = (alertId: string) =>
@@ -209,9 +211,29 @@ export default function AlertPanel({ alerts, onAlertClick, selectedAlert, onAckn
   };
   const selectedTriage = selectedAlert ? resolveTriage(selectedAlert.id) : null;
 
-  useEffect(() => {
-    setActionFeedback(null);
-  }, [selectedAlert?.id]);
+  const runDiagnostic = (alert: Alert) => {
+    const now = new Date().toISOString();
+    const severityWeight = alert.severity === 'CRITICAL' ? 0.96 : alert.severity === 'WARNING' ? 0.82 : 0.74;
+    const sensorSignal = alert.type === 'SENSOR_OFFLINE' ? 'DEGRADED' : 'STABLE';
+    const geoSignal = alert.type === 'GEOFENCE_BREACH' || alert.type === 'ROUTE_DEVIATION' ? 'OUT_OF_CORRIDOR' : 'IN_CORRIDOR';
+    const recommendation =
+      alert.severity === 'CRITICAL'
+        ? 'Escalate to SecOps and dispatch carrier contact immediately.'
+        : alert.severity === 'WARNING'
+          ? 'Assign operator and monitor next telemetry window.'
+          : 'Log for trend analysis and continue monitoring.';
+
+    setDiagnosticReport(
+      `[DIAGNOSTIC] ${alert.id}
+[TIMESTAMP] ${now}
+[SHIPMENT] ${alert.shipmentId}
+[SEVERITY] ${alert.severity}
+[ALERT TYPE] ${alertTypeLabels[alert.type] || alert.type}
+[SIGNAL] Sensor=${sensorSignal} | Route=${geoSignal}
+[CONFIDENCE] ${(severityWeight * 100).toFixed(0)}%
+[RECOMMENDATION] ${recommendation}`
+    );
+  };
 
   return (
     <div className="relative w-full h-full bg-[#0b0f14] p-3 sm:p-4 lg:p-6 overflow-auto">
@@ -469,7 +491,7 @@ export default function AlertPanel({ alerts, onAlertClick, selectedAlert, onAckn
               VIEW SHIPMENT
             </button>
             <button 
-              onClick={() => alert(`Running diagnostic for alert: ${selectedAlert.id}\n\nType: ${selectedAlert.type}\nSeverity: ${selectedAlert.severity}\n\nDiagnostic Results:\n• Sensor connectivity: OK\n• GPS signal: Strong\n• Data integrity: Verified\n• Recommended action: Contact carrier`)}
+              onClick={() => runDiagnostic(selectedAlert)}
               className="flex-1 px-4 py-2 bg-white/5 border border-white/10 text-white/80 text-sm rounded hover:bg-white/10 transition-colors"
             >
               RUN DIAGNOSTIC
@@ -478,6 +500,12 @@ export default function AlertPanel({ alerts, onAlertClick, selectedAlert, onAckn
           {actionFeedback && (
             <div className="mt-2 text-xs text-warning">
               {actionFeedback}
+            </div>
+          )}
+          {diagnosticReport && (
+            <div className="mt-3 rounded-lg border border-white/10 bg-black/60 p-3">
+              <div className="text-[10px] uppercase tracking-[0.25em] text-white/50 mb-2">Diagnostic Report</div>
+              <pre className="whitespace-pre-wrap text-[11px] leading-relaxed text-white/80 font-mono">{diagnosticReport}</pre>
             </div>
           )}
         </div>

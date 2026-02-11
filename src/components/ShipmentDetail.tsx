@@ -1,3 +1,14 @@
+import { useState, type ReactNode } from 'react';
+import {
+  IconActivityHeartbeat,
+  IconCpu,
+  IconDroplet,
+  IconPlane,
+  IconShip,
+  IconTemperature,
+  IconTruck,
+  IconWaveSine,
+} from '@tabler/icons-react';
 import { mockJourneyLegs, mockSensors, mockCarriers } from '../data/mockData';
 import { computeEtaBand } from '../lib/etaBands';
 import { buildYieldOpsDeepLink } from '../lib/deepLinks';
@@ -137,28 +148,28 @@ export default function ShipmentDetail({ shipment, onClose, onOpenDVR }: Shipmen
               value={shipment.telemetry.shock?.toFixed(2) || '0.00'}
               unit="G"
               status={shipment.telemetry.shock && shipment.telemetry.shock > 3 ? 'critical' : 'normal'}
-              icon="📳"
+              icon={<IconActivityHeartbeat className="w-4 h-4 text-white/60" />}
             />
             <TelemetryCard 
               label="Temperature"
               value={shipment.telemetry.temperature?.toFixed(1) || '0.0'}
               unit="°C"
               status={shipment.telemetry.temperature && shipment.telemetry.temperature > 25 ? 'warning' : 'normal'}
-              icon="🌡️"
+              icon={<IconTemperature className="w-4 h-4 text-white/60" />}
             />
             <TelemetryCard 
               label="Humidity"
               value={shipment.telemetry.humidity?.toFixed(0) || '0'}
               unit="%"
               status="normal"
-              icon="💧"
+              icon={<IconDroplet className="w-4 h-4 text-white/60" />}
             />
             <TelemetryCard 
               label="Vibration"
               value={shipment.telemetry.vibration?.toFixed(0) || '0'}
               unit="Hz"
               status={shipment.telemetry.vibration && shipment.telemetry.vibration > 100 ? 'warning' : 'normal'}
-              icon="〰️"
+              icon={<IconWaveSine className="w-4 h-4 text-white/60" />}
             />
           </div>
         </section>
@@ -199,9 +210,9 @@ export default function ShipmentDetail({ shipment, onClose, onOpenDVR }: Shipmen
                     w-8 h-8 rounded-full flex items-center justify-center text-sm
                     ${leg.status === 'COMPLETE' ? 'bg-success/20 text-success' : 'bg-accent/20 text-accent'}
                   `}>
-                    {leg.type === 'AIR' && '✈️'}
-                    {leg.type === 'SEA' && '🚢'}
-                    {leg.type === 'LAND' && '🚛'}
+                    {leg.type === 'AIR' && <IconPlane className="w-4 h-4" />}
+                    {leg.type === 'SEA' && <IconShip className="w-4 h-4" />}
+                    {leg.type === 'LAND' && <IconTruck className="w-4 h-4" />}
                   </div>
                   {index < journeyLegs.length - 1 && (
                     <div className="w-0.5 h-full bg-border mt-1" />
@@ -263,7 +274,7 @@ export default function ShipmentDetail({ shipment, onClose, onOpenDVR }: Shipmen
             {shipment.waferLotIds.map((lotId) => (
               <div key={lotId} className="flex items-center justify-between bg-code-bg border border-border rounded-lg p-3">
                 <div className="flex items-center gap-2">
-                  <span className="text-lg">💎</span>
+                  <IconCpu className="w-5 h-5 text-accent" />
                   <div>
                     <div className="text-sm text-text-bright">{lotId}</div>
                     <div className="text-xs text-text-muted">3nm Process Node</div>
@@ -304,13 +315,44 @@ function OpenYieldOpsButton({ shipment }: { shipment: Shipment }) {
 function ContactCarrierButton({ shipment }: { shipment: Shipment }) {
   const carrier = mockCarriers.find(c => c.id === shipment.carrierId);
   const carrierName = carrier?.name || 'Unknown Carrier';
+  const [isSending, setIsSending] = useState(false);
+  const carrierDomain = carrierName.toLowerCase().replace(/[^a-z0-9]+/g, '');
+  const contactEmail = `dispatch@${carrierDomain || 'carrier'}.log`;
+  const contactPhone = '+1 (555) 0123-4567';
+
+  const handleContact = async () => {
+    setIsSending(true);
+    try {
+      if (typeof navigator !== 'undefined' && navigator.clipboard) {
+        await navigator.clipboard.writeText(
+          `Carrier: ${carrierName}\nTracking: ${shipment.trackingCode}\nPhone: ${contactPhone}\nEmail: ${contactEmail}`
+        );
+      }
+    } catch {
+      // Clipboard permission may be denied; continue with mail intent.
+    } finally {
+      setIsSending(false);
+    }
+
+    const subject = `Transvec dispatch request: ${shipment.trackingCode}`;
+    const body = [
+      `Shipment: ${shipment.trackingCode}`,
+      `Route: ${shipment.origin.name} -> ${shipment.destination.name}`,
+      'Please provide immediate dispatch status and ETA confirmation.',
+    ].join('\n');
+    const mailto = `mailto:${contactEmail}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+    window.open(mailto, '_blank', 'noopener,noreferrer');
+  };
   
   return (
     <button 
-      onClick={() => alert(`Contacting carrier for ${shipment.trackingCode}...\n\nCarrier: ${carrierName}\nPhone: +1 (555) 0123-4567\nEmail: dispatch@${carrierName.toLowerCase().replace(/\s/g, '')}.log`)}
+      onClick={() => {
+        void handleContact();
+      }}
+      disabled={isSending}
       className="flex-1 px-4 py-2 bg-accent text-white text-sm font-bold rounded hover:bg-accent-hover transition-colors"
     >
-      CONTACT CARRIER
+      {isSending ? 'CONTACTING...' : 'CONTACT CARRIER'}
     </button>
   );
 }
@@ -353,7 +395,7 @@ interface TelemetryCardProps {
   value: string;
   unit: string;
   status: 'normal' | 'warning' | 'critical';
-  icon: string;
+  icon: ReactNode;
 }
 
 function TelemetryCard({ label, value, unit, status, icon }: TelemetryCardProps) {

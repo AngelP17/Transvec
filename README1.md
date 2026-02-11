@@ -88,6 +88,20 @@ sequenceDiagram
     D-->>U: Full object view and telemetry context
 ```
 
+### Map Resilience Pattern
+
+```mermaid
+flowchart LR
+    U[User Loads OPS] --> M[MapView Boot]
+    M --> S{Primary Style Available}
+    S -->|Yes| R[Render Selected Style]
+    S -->|No| F[Fallback Raster Style]
+    R --> P[Render Shipment Point Layer First]
+    F --> P
+    P --> A[Auto-fit View to Active Shipments]
+    A --> I[Interactive Click: Nearest Asset + Detail Context]
+```
+
 ---
 
 ## Features

@@ -97,6 +97,7 @@ const FALLBACK_STYLE_DEFINITIONS: Record<MapStyleId, StyleSpecification> = {
 };
 
 const DEFAULT_YIELDOPS_BASE_URL = 'https://yield-ops-dashboard.vercel.app';
+const MAP_STYLE_STORAGE_KEY = 'transvec:map-style:v1';
 
 function stripTrailingSlash(url: string) {
   return url.replace(/\/+$/, '');
@@ -261,6 +262,7 @@ export default function MapView({
   const styleReadyFrame = useRef<number | null>(null);
   const mapMotionFrame = useRef<number | null>(null);
   const liveCaptureInterval = useRef<number | null>(null);
+  const hasAutoFramedRef = useRef(false);
   const styleEpochRef = useRef(0);
   const styleReadyEpochRef = useRef<number | null>(null);
   const hasAppliedStyleRef = useRef(false);
@@ -268,7 +270,14 @@ export default function MapView({
   const [isStyleReady, setIsStyleReady] = useState(false);
   const [styleVersion, setStyleVersion] = useState(0);
   const [loadError, setLoadError] = useState<string | null>(null);
-  const [mapStyleId, setMapStyleId] = useState<MapStyleId>('darkmatter');
+  const [mapStyleId, setMapStyleId] = useState<MapStyleId>(() => {
+    if (typeof window === 'undefined') return 'darkmatter';
+    const stored = window.localStorage.getItem(MAP_STYLE_STORAGE_KEY);
+    if (stored === 'darkmatter' || stored === 'satellite' || stored === 'streets') {
+      return stored;
+    }
+    return 'darkmatter';
+  });
   const [searchTerm, setSearchTerm] = useState('');
   const [locationQuery, setLocationQuery] = useState('');
   const [isRightRailOpen, setIsRightRailOpen] = useState(true);
@@ -330,6 +339,23 @@ export default function MapView({
       showToast(`Switched to ${label}`);
     }
   }, [mapStyleId, showToast]);
+
+  const handleShareOps = useCallback(async () => {
+    try {
+      if (typeof navigator === 'undefined' || !navigator.clipboard) {
+        throw new Error('Clipboard API unavailable');
+      }
+      await navigator.clipboard.writeText(window.location.href);
+      showToast('URL copied to clipboard');
+    } catch {
+      showToast('Unable to copy URL on this browser');
+    }
+  }, [showToast]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    window.localStorage.setItem(MAP_STYLE_STORAGE_KEY, mapStyleId);
+  }, [mapStyleId]);
 
   const markStyleReady = useCallback(() => {
     if (!map.current) return;
@@ -453,7 +479,7 @@ export default function MapView({
   const showShipmentPopup = useCallback((shipment: Shipment, lng: number, lat: number) => {
     if (!map.current) return;
     const telemetry = shipment.telemetry;
-    const statusLabel = shipment.statusLabel || shipment.status;
+    const statusLabel = (shipment.statusLabel || shipment.status).replace(/_/g, ' ');
 
     if (!clickPopup.current) {
       clickPopup.current = new maplibregl.Popup({ offset: 18, closeButton: false, closeOnMove: false });
@@ -462,12 +488,12 @@ export default function MapView({
     clickPopup.current
       .setLngLat([lng, lat])
       .setHTML(`
-        <div style="font-family:'Instrument Sans',sans-serif;min-width:240px;color:#e5e7eb">
+        <div style="font-family:'Instrument Sans',sans-serif;width:min(320px,72vw);color:#e5e7eb">
           <div style="display:flex;justify-content:space-between;gap:10px;align-items:center">
-            <div style="font-weight:700;font-size:13px;letter-spacing:0.03em">${shipment.trackingCode}</div>
-            <div style="font-size:10px;padding:2px 8px;border:1px solid rgba(255,255,255,0.15);border-radius:999px">${statusLabel}</div>
+            <div style="font-weight:700;font-size:13px;letter-spacing:0.03em;max-width:65%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${shipment.trackingCode}</div>
+            <div style="font-size:10px;padding:2px 8px;border:1px solid rgba(255,255,255,0.15);border-radius:999px;max-width:35%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${statusLabel}</div>
           </div>
-          <div style="font-size:11px;color:#9aa3ad;margin-top:4px">${shipment.origin.name} → ${shipment.destination.name}</div>
+          <div style="font-size:11px;color:#9aa3ad;margin-top:4px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${shipment.origin.name} → ${shipment.destination.name}</div>
           <div style="margin-top:8px;display:grid;grid-template-columns:1fr 1fr;gap:6px;font-size:11px">
             <div style="background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);padding:6px;border-radius:8px">Shock<br/><strong>${(telemetry.shock ?? 0).toFixed(2)} G</strong></div>
             <div style="background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);padding:6px;border-radius:8px">Temp<br/><strong>${(telemetry.temperature ?? 0).toFixed(1)} °C</strong></div>
@@ -533,6 +559,7 @@ export default function MapView({
   const breachesEnabled = overlaysEnabled && showBreaches;
   const deviationsEnabled = overlaysEnabled;
   const showUiOverlays = !focusMode;
+  const hasShipmentDetailOpen = Boolean(selectedShipment);
 
   const getOverlayInsertBeforeId = useCallback((mapInstance: maplibregl.Map) => {
     const layers = mapInstance.getStyle().layers || [];
@@ -605,6 +632,40 @@ export default function MapView({
       }
     };
   }, [isLoaded, isStyleReady, mapStyleId, focusShipment?.id, styleVersion]);
+
+  useEffect(() => {
+    if (!map.current || !isLoaded || !isStyleReady) return;
+    if (hasAutoFramedRef.current) return;
+    if (selectedShipment?.currentLocation) return;
+    if (!shipmentsWithLocation.length) return;
+
+    const firstLocation = shipmentsWithLocation[0].currentLocation;
+    if (!firstLocation) return;
+
+    const bounds = new maplibregl.LngLatBounds(
+      [firstLocation.lng, firstLocation.lat],
+      [firstLocation.lng, firstLocation.lat]
+    );
+
+    shipmentsWithLocation.forEach((shipment) => {
+      if (!shipment.currentLocation) return;
+      bounds.extend([shipment.currentLocation.lng, shipment.currentLocation.lat]);
+    });
+
+    const rightPadding = typeof window !== 'undefined' && window.innerWidth >= 1024 ? 380 : 44;
+    map.current.fitBounds(bounds, {
+      padding: {
+        top: 120,
+        right: rightPadding,
+        bottom: 100,
+        left: 90,
+      },
+      maxZoom: 5.3,
+      duration: 700,
+      essential: true,
+    });
+    hasAutoFramedRef.current = true;
+  }, [isLoaded, isStyleReady, selectedShipment, shipmentsWithLocation]);
 
   // Initialize map
   useEffect(() => {
@@ -1573,7 +1634,7 @@ export default function MapView({
 
 
 
-          {showUiOverlays && (
+          {showUiOverlays && !hasShipmentDetailOpen && (
             <div className="absolute bottom-4 left-4 z-10 bg-black/80 border border-white/10 p-3 rounded-lg shadow-xl pointer-events-none">
               <div className="text-[10px] font-bold tracking-[0.3em] text-white/50 mb-2">STATUS</div>
               {Object.entries(statusColors).map(([status, color]) => (
@@ -1833,7 +1894,9 @@ export default function MapView({
                   Export PDF
                 </button>
                 <button
-                  onClick={() => { navigator.clipboard.writeText(window.location.href); showToast('URL copied to clipboard'); }}
+                  onClick={() => {
+                    void handleShareOps();
+                  }}
                   className="py-2 rounded-lg bg-white text-black text-[11px] font-semibold hover:bg-white/90 transition"
                 >
                   Share Ops
@@ -1841,14 +1904,16 @@ export default function MapView({
               </div>
             </div>
           </div>
-          {showUiOverlays && !isRightRailOpen && (
+          {showUiOverlays && !isRightRailOpen && !hasShipmentDetailOpen && (
             <>
               <OpsIntelPanel shipments={effectiveShipments} alerts={effectiveAlerts} />
               <CarrierPerformanceIndex shipments={effectiveShipments} alerts={effectiveAlerts} />
               <MissionTimelinePanel shipments={effectiveShipments} alerts={effectiveAlerts} />
             </>
           )}
-          {showUiOverlays && visibleSelectedShipment && <AssetDossierPanel shipment={visibleSelectedShipment} />}
+          {showUiOverlays && visibleSelectedShipment && !hasShipmentDetailOpen && (
+            <AssetDossierPanel shipment={visibleSelectedShipment} />
+          )}
 
           {/* Toast notification */}
           {showUiOverlays && toastMsg && (

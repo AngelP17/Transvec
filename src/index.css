@@ -61,18 +61,6 @@ body {
   height: 100% !important;
 }
 
-.mapboxgl-popup-content {
-  background: #17171a;
-  border: 1px solid #2a2a2f;
-  border-radius: 6px;
-  color: #e5e7eb;
-  padding: 12px;
-}
-
-.mapboxgl-popup-anchor-bottom .mapboxgl-popup-tip {
-  border-top-color: #17171a;
-}
-
 .maplibregl-popup-content {
   background: rgba(10, 12, 15, 0.95);
   border: 1px solid rgba(255, 255, 255, 0.08);

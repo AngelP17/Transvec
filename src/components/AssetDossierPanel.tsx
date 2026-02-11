@@ -14,6 +14,7 @@ import {
 } from '@tabler/icons-react';
 import type { Shipment } from '../types';
 import { computeEtaBand } from '../lib/etaBands';
+import { buildYieldOpsDeepLink } from '../lib/deepLinks';
 
 interface AssetDossierPanelProps {
   shipment: Shipment;
@@ -23,6 +24,7 @@ export default function AssetDossierPanel({ shipment }: AssetDossierPanelProps) 
   const dossier = shipment.dossier;
   if (!dossier) return null;
   const etaBand = computeEtaBand(shipment);
+  const upstreamHref = buildYieldOpsDeepLink(shipment);
 
   const modeIcon = dossier.mode === 'AIR'
     ? <IconPlane className="w-4 h-4 text-white/70" />
@@ -63,9 +65,14 @@ export default function AssetDossierPanel({ shipment }: AssetDossierPanelProps) 
         <div className="flex items-center gap-2 text-[10px]">
           <IconLink className="w-3 h-3 text-white/70" />
           <span className="text-white/50">UPSTREAM SOURCE:</span>
-          <span className="font-mono text-white underline decoration-dotted cursor-pointer hover:text-white">
+          <a
+            href={upstreamHref}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="font-mono text-white underline decoration-dotted cursor-pointer hover:text-white"
+          >
             {dossier.linkedJobId}
-          </span>
+          </a>
         </div>
         <div className="mt-1 flex items-center gap-2 text-[10px] text-white/50">
           <IconDatabase className="w-3 h-3" />

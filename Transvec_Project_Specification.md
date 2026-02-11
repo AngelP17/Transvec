@@ -175,6 +175,20 @@ sequenceDiagram
     APP->>DOS: Render AssetDossierPanel + ShipmentDetail
 ```
 
+#### Geospatial Resilience Flow
+
+```mermaid
+flowchart LR
+    INIT[Initialize MapView] --> STYLE{Map Style Ready}
+    STYLE -->|Remote style succeeds| ACTIVE[Active Style]
+    STYLE -->|Remote style fails| FALLBACK[Fallback Raster Style]
+    ACTIVE --> POINTS[Render shipment points]
+    FALLBACK --> POINTS
+    POINTS --> FRAME[Auto-frame camera to live points]
+    FRAME --> CLICK[Enable click-anywhere nearest shipment selection]
+    CLICK --> DETAIL[Open shipment detail context]
+```
+
 #### Architecture Documentation Rule
 
 - All architecture and interaction diagrams in Transvec markdown documentation should use Mermaid JS code blocks.
