@@ -66,71 +66,55 @@ const MAP_STYLE_OPTIONS: Array<{ id: MapStyleId; label: string }> = [
   { id: 'streets', label: 'Streets' },
 ];
 
-function cloneStyleDefinition(style: StyleSpecification): StyleSpecification {
-  if (typeof structuredClone === 'function') {
-    return structuredClone(style);
-  }
-  return JSON.parse(JSON.stringify(style)) as StyleSpecification;
-}
-
-const FALLBACK_STYLE_DEFINITIONS: Record<MapStyleId, StyleSpecification> = {
+const TILE_CONFIGS: Record<MapStyleId, { tiles: string[]; tileSize: number; attribution: string; bgColor: string }> = {
   darkmatter: {
-    version: 8,
-    sources: {
-      darkmatter: {
-        type: 'raster',
-        tiles: [
-          'https://a.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png',
-          'https://b.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png',
-          'https://c.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png',
-        ],
-        tileSize: 256,
-        attribution: '&copy; OpenStreetMap contributors &copy; CARTO',
-      },
-    },
-    layers: [
-      { id: 'darkmatter-background', type: 'background', paint: { 'background-color': '#0a0e12' } },
-      { id: 'darkmatter', type: 'raster', source: 'darkmatter' },
+    tiles: [
+      'https://a.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}@2x.png',
+      'https://b.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}@2x.png',
+      'https://c.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}@2x.png',
     ],
+    tileSize: 256,
+    attribution: '&copy; OpenStreetMap contributors &copy; CARTO',
+    bgColor: '#0a0e12',
   },
   satellite: {
-    version: 8,
-    sources: {
-      satellite: {
-        type: 'raster',
-        tiles: [
-          'https://services.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
-          'https://basemap.nationalmap.gov/arcgis/rest/services/USGSImageryOnly/MapServer/tile/{z}/{y}/{x}',
-        ],
-        tileSize: 256,
-        attribution: '&copy; Esri & contributors',
-      },
-    },
-    layers: [
-      { id: 'satellite-background', type: 'background', paint: { 'background-color': '#091018' } },
-      { id: 'satellite', type: 'raster', source: 'satellite' },
+    tiles: [
+      'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
     ],
+    tileSize: 256,
+    attribution: '&copy; Esri, Maxar, Earthstar Geographics',
+    bgColor: '#091018',
   },
   streets: {
+    tiles: [
+      'https://a.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}@2x.png',
+      'https://b.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}@2x.png',
+      'https://c.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}@2x.png',
+    ],
+    tileSize: 256,
+    attribution: '&copy; OpenStreetMap contributors &copy; CARTO',
+    bgColor: '#e8ecf1',
+  },
+};
+
+function buildBaseStyle(mode: MapStyleId): StyleSpecification {
+  const cfg = TILE_CONFIGS[mode];
+  return {
     version: 8,
     sources: {
-      streets: {
+      basemap: {
         type: 'raster',
-        tiles: [
-          'https://a.tile.openstreetmap.org/{z}/{x}/{y}.png',
-          'https://b.tile.openstreetmap.org/{z}/{x}/{y}.png',
-          'https://c.tile.openstreetmap.org/{z}/{x}/{y}.png',
-        ],
-        tileSize: 256,
-        attribution: '&copy; OpenStreetMap contributors',
+        tiles: cfg.tiles,
+        tileSize: cfg.tileSize,
+        attribution: cfg.attribution,
       },
     },
     layers: [
-      { id: 'streets-background', type: 'background', paint: { 'background-color': '#f2f4f7' } },
-      { id: 'streets', type: 'raster', source: 'streets' },
+      { id: 'basemap-bg', type: 'background', paint: { 'background-color': cfg.bgColor } },
+      { id: 'basemap-tiles', type: 'raster', source: 'basemap' },
     ],
-  },
-};
+  };
+}
 
 const DEFAULT_YIELDOPS_BASE_URL = 'https://yield-ops-dashboard.vercel.app';
 const MAP_STYLE_STORAGE_KEY = 'transvec:map-style:v1';
@@ -307,10 +291,8 @@ export default function MapView({
   const mapContainer = useRef<HTMLDivElement>(null);
   const map = useRef<maplibregl.Map | null>(null);
   const clickPopup = useRef<maplibregl.Popup | null>(null);
-  const styleReadyFrame = useRef<number | null>(null);
   const mapMotionFrame = useRef<number | null>(null);
   const liveCaptureInterval = useRef<number | null>(null);
-  const styleFallbackTimeoutRef = useRef<number | null>(null);
   const hasAutoFramedRef = useRef(false);
   const appliedStyleIdRef = useRef<MapStyleId | null>(null);
   const styleEpochRef = useRef(0);
@@ -376,8 +358,7 @@ export default function MapView({
   const { geofences } = useGeofences(effectiveShipments);
 
   const styleDefinition = useMemo(() => {
-    // Keep style switching deterministic and instant: use local raster style definitions.
-    return cloneStyleDefinition(FALLBACK_STYLE_DEFINITIONS[mapStyleId]);
+    return buildBaseStyle(mapStyleId);
   }, [mapStyleId]);
 
   const setMapStyle = useCallback((nextStyle: MapStyleId, announce = false) => {
@@ -650,6 +631,12 @@ export default function MapView({
     return labelLayer?.id;
   }, []);
 
+  const getFirstNonBasemapLayerId = useCallback((mapInstance: maplibregl.Map) => {
+    const layers = mapInstance.getStyle().layers || [];
+    const first = layers.find((layer) => layer.id !== 'basemap-bg' && layer.id !== 'basemap-tiles');
+    return first?.id;
+  }, []);
+
   useEffect(() => {
     if (typeof window === 'undefined') return;
     const mobileMedia = window.matchMedia('(max-width: 1023px)');
@@ -757,7 +744,8 @@ export default function MapView({
         bottom: 100,
         left: 90,
       },
-      maxZoom: 5.3,
+      minZoom: 2.5,
+      maxZoom: 6,
       duration: 700,
       essential: true,
     });
@@ -793,7 +781,8 @@ export default function MapView({
         container: mapContainer.current,
         style: styleDefinition,
         center: [20, 20],
-        zoom: 1.8,
+        zoom: 2.8,
+        minZoom: 2,
         pitch: 45,
         bearing: -20,
         antialias: true,
@@ -1329,80 +1318,53 @@ export default function MapView({
     };
   }, [isLoaded, isStyleReady, overlayPalette.routeOpacity, styleVersion]);
 
-  // Swap map style without animation
+  // Swap map tiles without tearing down the style — keeps data layers intact
   useEffect(() => {
     if (!map.current || !isLoaded) return;
-    if (appliedStyleIdRef.current === mapStyleId) {
-      return;
-    }
-    setIsStyleReady(false);
-    setLoadError(null);
-    styleEpochRef.current += 1;
-    styleReadyEpochRef.current = null;
-    const mapInstance = map.current;
+    if (appliedStyleIdRef.current === mapStyleId) return;
+
     appliedStyleIdRef.current = mapStyleId;
-    const isRemoteStyle = typeof styleDefinition === 'string';
-    let fallbackApplied = false;
-    let styleErrorHandler: ((e: unknown) => void) | null = null;
-    let disposed = false;
+    const mapInstance = map.current;
+    const cfg = TILE_CONFIGS[mapStyleId];
 
-    const applyFallbackStyle = () => {
-      if (disposed || fallbackApplied || !map.current) return;
-      fallbackApplied = true;
-      map.current.setStyle(cloneStyleDefinition(FALLBACK_STYLE_DEFINITIONS[mapStyleId]), { diff: false });
-      showToast(`Using fallback ${MAP_STYLE_OPTIONS.find((s) => s.id === mapStyleId)?.label || mapStyleId} style`);
-    };
-
-    if (isRemoteStyle) {
-      styleErrorHandler = () => {
-        applyFallbackStyle();
-      };
-      mapInstance.once('error', styleErrorHandler);
-
-      if (styleFallbackTimeoutRef.current) {
-        window.clearTimeout(styleFallbackTimeoutRef.current);
-        styleFallbackTimeoutRef.current = null;
+    const source = mapInstance.getSource('basemap');
+    if (source && typeof (source as any).setTiles === 'function') {
+      (source as any).setTiles(cfg.tiles);
+      if (typeof (source as any).reload === 'function') {
+        (source as any).reload();
       }
-      styleFallbackTimeoutRef.current = window.setTimeout(() => {
-        // Guard against silent remote style failures that never emit an error.
-        if (!map.current || map.current.isStyleLoaded()) return;
-        applyFallbackStyle();
-      }, 3500);
+    } else {
+      // Fallback path still avoids setStyle() to prevent black-screen teardown.
+      if (mapInstance.getLayer('basemap-tiles')) mapInstance.removeLayer('basemap-tiles');
+      if (mapInstance.getLayer('basemap-bg')) mapInstance.removeLayer('basemap-bg');
+      if (mapInstance.getSource('basemap')) mapInstance.removeSource('basemap');
+
+      const beforeId = getFirstNonBasemapLayerId(mapInstance);
+      mapInstance.addSource('basemap', {
+        type: 'raster',
+        tiles: cfg.tiles,
+        tileSize: cfg.tileSize,
+        attribution: cfg.attribution,
+      });
+      mapInstance.addLayer(
+        { id: 'basemap-bg', type: 'background', paint: { 'background-color': cfg.bgColor } },
+        beforeId
+      );
+      mapInstance.addLayer(
+        { id: 'basemap-tiles', type: 'raster', source: 'basemap' },
+        beforeId
+      );
     }
 
-    mapInstance.setStyle(styleDefinition, { diff: false });
-
-    const startedAt = Date.now();
-    const waitForStyleReady = () => {
-      if (!map.current) return;
-      if (map.current.isStyleLoaded()) {
-        markStyleReady();
-        styleReadyFrame.current = null;
-        return;
-      }
-      if (Date.now() - startedAt > 7000) {
-        styleReadyFrame.current = null;
-        return;
-      }
-      styleReadyFrame.current = requestAnimationFrame(waitForStyleReady);
-    };
-    styleReadyFrame.current = requestAnimationFrame(waitForStyleReady);
-
-    return () => {
-      disposed = true;
-      if (styleErrorHandler) {
-        mapInstance.off('error', styleErrorHandler);
-      }
-      if (styleFallbackTimeoutRef.current) {
-        window.clearTimeout(styleFallbackTimeoutRef.current);
-        styleFallbackTimeoutRef.current = null;
-      }
-      if (styleReadyFrame.current) {
-        cancelAnimationFrame(styleReadyFrame.current);
-        styleReadyFrame.current = null;
-      }
-    };
-  }, [styleDefinition, isLoaded, mapStyleId, markStyleReady, showToast]);
+    if (mapInstance.getLayer('basemap-bg')) {
+      mapInstance.setPaintProperty('basemap-bg', 'background-color', cfg.bgColor);
+    }
+    if (mapInstance.getLayer('basemap-tiles')) {
+      mapInstance.setPaintProperty('basemap-tiles', 'raster-opacity', 1);
+    }
+    mapInstance.triggerRepaint();
+    setStyleVersion((v) => v + 1);
+  }, [mapStyleId, isLoaded, getFirstNonBasemapLayerId]);
 
   // Shipment point layer (always-on, replaces fragile DOM markers)
   useEffect(() => {
