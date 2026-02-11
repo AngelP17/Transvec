@@ -4,6 +4,8 @@ This completes the digital thread in both directions:
 - Transvec -> YieldOps: open a job-focused YieldOps URL from a shipment.
 - YieldOps -> Transvec: open Transvec focused on a tracking id.
 
+> Note: YieldOps now runs in demo mode by default for portfolio hosting. Deep-link integration still works in demo mode. Backend/Supabase are only required for live data synchronization.
+
 ## 1) Create integration file in YieldOps
 
 Create `apps/dashboard/src/components/YieldOps_Integration.tsx`:
@@ -106,10 +108,10 @@ Inside each card:
 
 ## 4) Transvec environment variable
 
-In Transvec, configure the target YieldOps URL:
+In Transvec, configure the target YieldOps URL (typically the Vercel frontend URL):
 
 ```bash
-VITE_YIELDOPS_BASE_URL=https://your-yieldops-host.example
+VITE_YIELDOPS_BASE_URL=https://yield-ops-dashboard.vercel.app
 ```
 
 Transvec already sends:
@@ -125,7 +127,8 @@ From Transvec:
 - Click `OPEN YIELDOPS`.
 - YieldOps should open with query params and auto-search.
 
+In demo mode, navigation and deep-linking work without backend dependencies.
+
 From YieldOps:
 - Click `Track Asset` on a job.
 - Transvec should open focused on the matching shipment.
-

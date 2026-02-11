@@ -1,7 +1,16 @@
 import { createClient } from '@supabase/supabase-js';
 
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || 'https://vwayvxcvkozxumezwqio.supabase.co';
-const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || 'sb_publishable_bATl6MEumny_GL_qPtlI4Q_ubu3L0r1';
+const configuredSupabaseUrl = (import.meta.env.VITE_SUPABASE_URL || '').trim();
+const configuredSupabaseAnonKey = (import.meta.env.VITE_SUPABASE_ANON_KEY || '').trim();
+
+export const isSupabaseConfigured =
+  configuredSupabaseUrl.length > 0 &&
+  configuredSupabaseAnonKey.length > 0 &&
+  configuredSupabaseUrl !== 'https://your-project.supabase.co' &&
+  configuredSupabaseAnonKey !== 'your_anon_key_here';
+
+const supabaseUrl = isSupabaseConfigured ? configuredSupabaseUrl : 'https://demo-mode.invalid';
+const supabaseAnonKey = isSupabaseConfigured ? configuredSupabaseAnonKey : 'demo-mode-key';
 
 export const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
@@ -9,6 +18,8 @@ const geofenceSyncUrl = import.meta.env.VITE_GEOFENCE_SYNC_URL
   || `${supabaseUrl}/functions/v1/geofence-sync`;
 
 async function invokeGeofenceSync(body: Record<string, unknown>) {
+  if (!isSupabaseConfigured) return false;
+
   try {
     const { error } = await supabase.functions.invoke('geofence-sync', { body });
     if (!error) return true;

@@ -20,6 +20,7 @@ import {
   subscribeToTransvecShipments,
   subscribeToTransvecAlerts,
   subscribeToGeofences,
+  isSupabaseConfigured,
 } from '../lib/supabase';
 import {
   transformJobToShipment,
@@ -157,6 +158,13 @@ export function useSupabaseData(): UseSupabaseDataReturn {
 
     if (!isBackground || isInitialLoad.current) setLoading(true);
     setError(null);
+
+    if (!isSupabaseConfigured) {
+      setUseMockFallback(true);
+      setLoading(false);
+      isInitialLoad.current = false;
+      return;
+    }
 
     try {
       const [machines, jobs, incidents, transvecShipments, transvecAlerts, geofenceRows] = await Promise.all([
