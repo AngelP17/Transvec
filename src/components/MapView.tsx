@@ -262,6 +262,7 @@ export default function MapView({
   const styleReadyFrame = useRef<number | null>(null);
   const mapMotionFrame = useRef<number | null>(null);
   const liveCaptureInterval = useRef<number | null>(null);
+  const styleFallbackTimeoutRef = useRef<number | null>(null);
   const hasAutoFramedRef = useRef(false);
   const appliedStyleIdRef = useRef<MapStyleId | null>(null);
   const styleEpochRef = useRef(0);
@@ -1273,15 +1274,30 @@ export default function MapView({
     const isRemoteStyle = typeof styleDefinition === 'string';
     let fallbackApplied = false;
     let styleErrorHandler: ((e: unknown) => void) | null = null;
+    let disposed = false;
+
+    const applyFallbackStyle = () => {
+      if (disposed || fallbackApplied || !map.current) return;
+      fallbackApplied = true;
+      map.current.setStyle(structuredClone(FALLBACK_STYLE_DEFINITIONS[mapStyleId]), { diff: false });
+      showToast(`Using fallback ${MAP_STYLE_OPTIONS.find((s) => s.id === mapStyleId)?.label || mapStyleId} style`);
+    };
 
     if (isRemoteStyle) {
       styleErrorHandler = () => {
-        if (fallbackApplied || !map.current) return;
-        fallbackApplied = true;
-        map.current.setStyle(structuredClone(FALLBACK_STYLE_DEFINITIONS[mapStyleId]), { diff: false });
-        showToast(`Using fallback ${MAP_STYLE_OPTIONS.find((s) => s.id === mapStyleId)?.label || mapStyleId} style`);
+        applyFallbackStyle();
       };
       mapInstance.once('error', styleErrorHandler);
+
+      if (styleFallbackTimeoutRef.current) {
+        window.clearTimeout(styleFallbackTimeoutRef.current);
+        styleFallbackTimeoutRef.current = null;
+      }
+      styleFallbackTimeoutRef.current = window.setTimeout(() => {
+        // Guard against silent remote style failures that never emit an error.
+        if (!map.current || map.current.isStyleLoaded()) return;
+        applyFallbackStyle();
+      }, 3500);
     }
 
     mapInstance.setStyle(styleDefinition, { diff: false });
@@ -1303,8 +1319,13 @@ export default function MapView({
     styleReadyFrame.current = requestAnimationFrame(waitForStyleReady);
 
     return () => {
+      disposed = true;
       if (styleErrorHandler) {
         mapInstance.off('error', styleErrorHandler);
+      }
+      if (styleFallbackTimeoutRef.current) {
+        window.clearTimeout(styleFallbackTimeoutRef.current);
+        styleFallbackTimeoutRef.current = null;
       }
       if (styleReadyFrame.current) {
         cancelAnimationFrame(styleReadyFrame.current);
