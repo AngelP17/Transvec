@@ -760,7 +760,7 @@ export default function MapView({
       },
       minZoom: 2.5,
       maxZoom: 6,
-      duration: 700,
+      duration: 1300,
       essential: true,
     });
     hasAutoFramedRef.current = true;

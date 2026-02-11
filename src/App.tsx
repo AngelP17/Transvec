@@ -108,7 +108,6 @@ function App() {
     )
   ), [alerts]);
   const isUsingLiveData = hasLiveShipments || hasLiveAlerts;
-  const isHybridMode = isUsingLiveData && (mockShipments.length > 0 || mockAlerts.length > 0);
   const isOpsFocusMode = focusMode && activeTab === 'OPS';
 
   useEffect(() => {
@@ -316,18 +315,6 @@ function App() {
                 >
                   Retry
                 </button>
-              </div>
-            </div>
-          )}
-
-          {/* Data source indicator */}
-          {!isOpsFocusMode && (
-            <div className="hidden sm:block absolute bottom-4 left-1/2 -translate-x-1/2 z-50 bg-void-lighter/90 border border-border px-3 py-1.5 rounded-lg">
-              <div className="flex items-center gap-2">
-                <span className={`w-2 h-2 rounded-full ${isUsingLiveData ? 'bg-success animate-pulse' : 'bg-warning'}`} />
-                <span className="text-[10px] text-text-muted uppercase tracking-wider">
-                  {isUsingLiveData ? (isHybridMode ? 'Live + Demo' : 'Live Data') : 'Demo Mode'}
-                </span>
               </div>
             </div>
           )}
