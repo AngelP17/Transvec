@@ -482,13 +482,18 @@ export default function MapView({
     const statusLabel = (shipment.statusLabel || shipment.status).replace(/_/g, ' ');
 
     if (!clickPopup.current) {
-      clickPopup.current = new maplibregl.Popup({ offset: 18, closeButton: false, closeOnMove: false });
+      clickPopup.current = new maplibregl.Popup({
+        offset: 18,
+        closeButton: false,
+        closeOnMove: false,
+        maxWidth: 'none',
+      });
     }
 
     clickPopup.current
       .setLngLat([lng, lat])
       .setHTML(`
-        <div style="font-family:'Instrument Sans',sans-serif;width:min(320px,72vw);color:#e5e7eb">
+        <div style="font-family:'Instrument Sans',sans-serif;width:min(320px,calc(100vw - 64px));color:#e5e7eb">
           <div style="display:flex;justify-content:space-between;gap:10px;align-items:center">
             <div style="font-weight:700;font-size:13px;letter-spacing:0.03em;max-width:65%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${shipment.trackingCode}</div>
             <div style="font-size:10px;padding:2px 8px;border:1px solid rgba(255,255,255,0.15);border-radius:999px;max-width:35%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${statusLabel}</div>
